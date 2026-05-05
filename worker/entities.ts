@@ -42,6 +42,7 @@ export class VFSEntity extends IndexedEntity<VFSItem> {
     { id: "root-docs", name: "Documents", type: "folder", parentId: null, size: 0, updatedAt: Date.now() },
     { id: "root-desktop", name: "Desktop", type: "folder", parentId: null, size: 0, updatedAt: Date.now() },
     { id: "root-downloads", name: "Downloads", type: "folder", parentId: null, size: 0, updatedAt: Date.now() },
-    { id: "welcome-txt", name: "Welcome.txt", type: "file", parentId: "root-docs", content: "Welcome to WebDash Cloud OS!", size: 28, updatedAt: Date.now() }
+    { id: "welcome-txt", name: "Welcome.txt", type: "file", parentId: "root-docs", content: "Welcome to WebDash Cloud OS!", size: 28, updatedAt: Date.now() },
+    { id: "desktop-readme", name: "Read Me.txt", type: "file", parentId: "root-desktop", content: "This is your cloud desktop. Drag files here to persist them across sessions.", size: 78, updatedAt: Date.now() }
   ];
 }

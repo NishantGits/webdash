@@ -7,10 +7,14 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
   app.get('/api/test', (c) => c.json({ success: true, data: { name: 'CF Workers Demo' }}));
   // VFS ENDPOINTS
   app.get('/api/vfs', async (c) => {
+    // Ensure we have initial seed data
     await VFSEntity.ensureSeed(c.env);
-    const parentId = c.req.query('parentId') || null;
-    const { items } = await VFSEntity.list(c.env);
-    const filtered = items.filter(item => item.parentId === (parentId === "null" ? null : parentId));
+    const queryParent = c.req.query('parentId');
+    // Standardize null/empty parent references
+    const parentId = (queryParent === "null" || !queryParent) ? null : queryParent;
+    const result = await VFSEntity.list(c.env);
+    const items = result?.items || [];
+    const filtered = items.filter(item => item.parentId === parentId);
     return ok(c, filtered);
   });
   app.post('/api/vfs', async (c) => {
@@ -20,7 +24,7 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
       id: crypto.randomUUID(),
       name: body.name,
       type: body.type,
-      parentId: body.parentId,
+      parentId: body.parentId === "null" ? null : (body.parentId || null),
       content: body.content || "",
       size: body.content?.length || 0,
       updatedAt: Date.now()
@@ -47,7 +51,7 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
     const state = await entity.getState();
     if (state.type === 'folder') {
       const { items } = await VFSEntity.list(c.env);
-      const children = items.filter(i => i.parentId === id);
+      const children = (items || []).filter(i => i.parentId === id);
       for (const child of children) {
         await VFSEntity.delete(c.env, child.id);
       }
