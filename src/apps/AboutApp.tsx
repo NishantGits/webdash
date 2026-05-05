@@ -18,10 +18,40 @@ export function AboutApp() {
     { label: 'Graphics', value: 'WebGL Hardware Acceleration' },
     { label: 'Serial Number', value: 'WD-2025-CF-DO' },
   ];
-  const copyToClipboard = () => {
-    const text = systemSpecs.map(s => `${s.label}: ${s.value}`).join('\n');
-    navigator.clipboard.writeText(`WebDash Cloud OS\nVersion 1.1.0\n${text}`);
-    toast.success('System information copied to clipboard');
+  const copyToClipboard = async () => {
+    const text = `WebDash Cloud OS\nVersion 1.1.0\n${systemSpecs.map(s => `${s.label}: ${s.value}`).join('\n')}`;
+    try {
+      // Primary modern approach
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        toast.success('Copied to clipboard');
+        return;
+      }
+      throw new Error('Clipboard API unavailable');
+    } catch (err) {
+      // Robust Legacy Fallback
+      try {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        // Ensure textarea is not visible but part of DOM
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        textArea.style.top = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        if (successful) {
+          toast.success('Copied (Legacy Fallback)');
+        } else {
+          throw new Error('Fallback failed');
+        }
+      } catch (fallbackErr) {
+        console.error('Final copy failure:', fallbackErr);
+        toast.error('Failed to copy system information');
+      }
+    }
   };
   const showSystemReport = () => {
     toast.info('Generating System Report...', {

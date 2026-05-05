@@ -24,6 +24,7 @@ interface OSStore {
   vfsNonce: number;
   isSpotlightOpen: boolean;
   isDockVisible: boolean;
+  isVfsDragging: boolean;
   openApp: (appType: AppType, title: string, metadata?: any) => void;
   closeApp: (id: string) => void;
   focusWindow: (id: string) => void;
@@ -41,6 +42,7 @@ interface OSStore {
   toggleSpotlight: () => void;
   setSpotlight: (open: boolean) => void;
   setDockVisible: (visible: boolean) => void;
+  setVfsDragging: (dragging: boolean) => void;
 }
 const Z_INDEX_CEILING = 9000;
 const Z_INDEX_START = 10;
@@ -54,12 +56,12 @@ export const useOSStore = create<OSStore>((set) => ({
   vfsNonce: 0,
   isSpotlightOpen: false,
   isDockVisible: true,
+  isVfsDragging: false,
   openApp: (appType, title, metadata) => set((state) => {
     const canMultiple = ['image-viewer', 'text-editor'].includes(appType);
     const existing = !canMultiple ? state.windows.find(w => w.appType === appType) : null;
     let nextZ = state.zIndexCounter + 1;
     let windows = state.windows;
-    // Normalize z-indices if ceiling reached
     if (nextZ >= Z_INDEX_CEILING) {
       windows = [...state.windows].sort((a, b) => a.zIndex - b.zIndex).map((w, i) => ({ ...w, zIndex: Z_INDEX_START + i }));
       nextZ = Z_INDEX_START + windows.length + 1;
@@ -68,14 +70,14 @@ export const useOSStore = create<OSStore>((set) => ({
       return {
         activeWindowId: existing.id,
         zIndexCounter: nextZ,
-        windows: windows.map(w =>
-          w.id === existing.id
-            ? {
-                ...w,
-                isMinimized: false,
+        windows: windows.map(w => 
+          w.id === existing.id 
+            ? { 
+                ...w, 
+                isMinimized: false, 
                 zIndex: nextZ,
-                metadata: metadata ? { ...w.metadata, ...metadata } : w.metadata
-              }
+                metadata: metadata ? { ...w.metadata, ...metadata } : w.metadata 
+              } 
             : w
         )
       };
@@ -116,13 +118,13 @@ export const useOSStore = create<OSStore>((set) => ({
     return {
       activeWindowId: id,
       zIndexCounter: nextZ,
-      windows: windows.map(w =>
+      windows: windows.map(w => 
         w.id === id ? { ...w, zIndex: nextZ, isMinimized: false } : w
       ),
     };
   }),
   minimizeWindow: (id) => set((state) => ({
-    windows: state.windows.map(w =>
+    windows: state.windows.map(w => 
       w.id === id ? { ...w, isMinimized: true } : w
     ),
     activeWindowId: state.activeWindowId === id ? null : state.activeWindowId,
@@ -151,7 +153,7 @@ export const useOSStore = create<OSStore>((set) => ({
           x: 0,
           y: 0,
           width: window.innerWidth,
-          height: window.innerHeight - 28, // Respect MenuBar
+          height: window.innerHeight - 28,
         };
       }
     })
@@ -166,7 +168,7 @@ export const useOSStore = create<OSStore>((set) => ({
     windows: state.windows.map(w => w.id === id ? { ...w, title } : w),
   })),
   updateWindowMetadata: (id, metadata) => set((state) => ({
-    windows: state.windows.map(w =>
+    windows: state.windows.map(w => 
       w.id === id ? { ...w, metadata: metadata ? { ...w.metadata, ...metadata } : w.metadata } : w
     ),
   })),
@@ -177,4 +179,5 @@ export const useOSStore = create<OSStore>((set) => ({
   toggleSpotlight: () => set((state) => ({ isSpotlightOpen: !state.isSpotlightOpen })),
   setSpotlight: (open) => set({ isSpotlightOpen: open }),
   setDockVisible: (visible) => set({ isDockVisible: visible }),
+  setVfsDragging: (dragging) => set({ isVfsDragging: dragging }),
 }));

@@ -1,15 +1,16 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Folder, 
-  File, 
-  ImageIcon, 
-  FileText, 
-  FolderPlus, 
-  FilePlus, 
-  RefreshCw, 
-  Trash2, 
-  Edit3, 
+import { useDraggable, useDroppable } from '@dnd-kit/core';
+import {
+  Folder,
+  File,
+  ImageIcon,
+  FileText,
+  FolderPlus,
+  FilePlus,
+  RefreshCw,
+  Trash2,
+  Edit3,
   ExternalLink,
   Play
 } from 'lucide-react';
@@ -24,7 +25,75 @@ import {
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
+interface DesktopIconProps {
+  item: VFSItem;
+  onOpen: (item: VFSItem) => void;
+  onRename: (item: VFSItem) => void;
+  onDelete: (item: VFSItem) => void;
+}
+function DesktopIcon({ item, onOpen, onRename, onDelete }: DesktopIconProps) {
+  const openApp = useOSStore(s => s.openApp);
+  const desktopId = useOSStore(s => s.desktopId);
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: item.id,
+  });
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id: item.id,
+    disabled: item.type !== 'folder',
+  });
+  const style = transform ? {
+    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+  } : undefined;
+  const renderIcon = () => {
+    if (item.type === 'folder') return <Folder className="w-10 h-10 text-blue-400 fill-blue-400/20" />;
+    const isImage = IMAGE_EXTENSIONS.some(ext => item.name.toLowerCase().endsWith(ext));
+    if (isImage) return <ImageIcon className="w-10 h-10 text-pink-400 fill-pink-400/10" />;
+    if (item.name.endsWith('.txt')) return <FileText className="w-10 h-10 text-emerald-400 fill-emerald-400/10" />;
+    return <File className="w-10 h-10 text-white/80" />;
+  };
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger className="pointer-events-auto">
+        <div 
+          ref={(node) => { setNodeRef(node); setDropRef(node); }}
+          style={style}
+          {...listeners}
+          {...attributes}
+          onDoubleClick={() => onOpen(item)}
+          className={cn(
+            "flex flex-col items-center gap-1 group cursor-default select-none transition-all duration-200",
+            isDragging && "opacity-0 scale-90",
+            isOver && item.type === 'folder' && "bg-blue-500/20 ring-2 ring-blue-500/40 rounded-xl"
+          )}
+        >
+          <div className="relative p-2 rounded-lg group-hover:bg-white/10 group-active:bg-white/20 transition-colors">
+            {renderIcon()}
+          </div>
+          <span className="text-[11px] font-medium text-white text-center break-words w-24 line-clamp-2 [text-shadow:_0_1px_2px_rgb(0_0_0_/_60%)]">
+            {item.name}
+          </span>
+        </div>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="w-52 glass border-white/20">
+        <ContextMenuItem onClick={() => onOpen(item)} className="gap-2">
+          <Play className="w-4 h-4" /> Open
+        </ContextMenuItem>
+        <ContextMenuItem onClick={() => openApp('finder', 'Finder', { navigateTo: desktopId || 'root-desktop' })} className="gap-2">
+          <ExternalLink className="w-4 h-4" /> Show in Finder
+        </ContextMenuItem>
+        <ContextMenuSeparator />
+        <ContextMenuItem onClick={() => onRename(item)} className="gap-2">
+          <Edit3 className="w-4 h-4" /> Rename
+        </ContextMenuItem>
+        <ContextMenuItem onClick={() => onDelete(item)} className="gap-2 text-destructive focus:text-destructive">
+          <Trash2 className="w-4 h-4" /> Move to Trash
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
 export function DesktopIcons() {
   const [items, setItems] = useState<VFSItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -32,25 +101,14 @@ export function DesktopIcons() {
   const openApp = useOSStore(s => s.openApp);
   const vfsNonce = useOSStore(s => s.vfsNonce);
   const notifyVfsChange = useOSStore(s => s.notifyVfsChange);
-  const retryCount = useRef(0);
+  const { setNodeRef } = useDroppable({ id: desktopId || 'root-desktop' });
   const fetchDesktopItems = useCallback(async () => {
     try {
       const targetParent = desktopId || 'root-desktop';
       const data = await api<VFSItem[]>(`/api/vfs?parentId=${targetParent}`);
-      if (Array.isArray(data)) {
-        setItems(data);
-        retryCount.current = 0;
-      } else {
-        setItems([]);
-      }
+      setItems(Array.isArray(data) ? data : []);
     } catch (err) {
-      if (retryCount.current < 3) {
-        retryCount.current++;
-        const delay = Math.pow(2, retryCount.current) * 1000;
-        setTimeout(fetchDesktopItems, delay);
-      } else {
-        console.error('[DesktopIcons] Failed to sync volume');
-      }
+      console.error('[DesktopIcons] Failed to sync volume');
     } finally {
       setIsLoading(false);
     }
@@ -90,10 +148,7 @@ export function DesktopIcons() {
     const newName = prompt('Rename item:', item.name);
     if (!newName || newName === item.name) return;
     try {
-      await api(`/api/vfs/${item.id}`, {
-        method: 'PUT',
-        body: JSON.stringify({ name: newName })
-      });
+      await api(`/api/vfs/${item.id}`, { method: 'PUT', body: JSON.stringify({ name: newName }) });
       notifyVfsChange();
       toast.success('Item renamed');
     } catch (err) {
@@ -110,82 +165,43 @@ export function DesktopIcons() {
       toast.error('Failed to delete item');
     }
   };
-  const renderIcon = (item: VFSItem) => {
-    if (item.type === 'folder') return <Folder className="w-10 h-10 text-blue-400 fill-blue-400/20" />;
-    const isImage = IMAGE_EXTENSIONS.some(ext => item.name.toLowerCase().endsWith(ext));
-    if (isImage) return <ImageIcon className="w-10 h-10 text-pink-400 fill-pink-400/10" />;
-    if (item.name.endsWith('.txt')) return <FileText className="w-10 h-10 text-emerald-400 fill-emerald-400/10" />;
-    return <File className="w-10 h-10 text-white/80" />;
-  };
   return (
-    <ContextMenu>
-      {/* Background trigger covering the whole desktop */}
-      <ContextMenuTrigger className="absolute inset-0 z-0 pointer-events-auto">
-        <div className="w-full h-full" />
-      </ContextMenuTrigger>
-      <div className="absolute top-10 right-4 bottom-24 w-32 pointer-events-none z-10">
-        <div className="flex flex-col items-center gap-6 p-4">
-          {isLoading && items.length === 0 && (
-            <div className="text-[10px] text-white/40 animate-pulse font-medium uppercase tracking-tighter">Syncing...</div>
-          )}
-          {items.map((item) => (
-            <ContextMenu key={item.id}>
-              <ContextMenuTrigger className="pointer-events-auto">
-                <motion.div
-                  onDoubleClick={() => handleOpen(item)}
-                  className="flex flex-col items-center gap-1 group cursor-default select-none"
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                >
-                  <div className="relative p-2 rounded-lg group-hover:bg-white/10 group-active:bg-white/20 transition-colors">
-                    {renderIcon(item)}
-                  </div>
-                  <span className="text-[11px] font-medium text-white text-center break-words w-24 line-clamp-2 [text-shadow:_0_1px_2px_rgb(0_0_0_/_60%)]">
-                    {item.name}
-                  </span>
-                </motion.div>
-              </ContextMenuTrigger>
-              <ContextMenuContent className="w-52 glass border-white/20">
-                <ContextMenuItem onClick={() => handleOpen(item)} className="gap-2">
-                  <Play className="w-4 h-4" /> Open
-                </ContextMenuItem>
-                <ContextMenuItem onClick={() => openApp('finder', 'Finder', { navigateTo: desktopId || 'root-desktop' })} className="gap-2">
-                  <ExternalLink className="w-4 h-4" /> Show in Finder
-                </ContextMenuItem>
-                <ContextMenuSeparator />
-                <ContextMenuItem onClick={() => handleRename(item)} className="gap-2">
-                  <Edit3 className="w-4 h-4" /> Rename
-                </ContextMenuItem>
-                <ContextMenuItem onClick={() => handleDelete(item)} className="gap-2 text-destructive focus:text-destructive">
-                  <Trash2 className="w-4 h-4" /> Move to Trash
-                </ContextMenuItem>
-              </ContextMenuContent>
-            </ContextMenu>
-          ))}
-          {!isLoading && items.length === 0 && (
-            <div className="flex flex-col items-center gap-2 opacity-20 mt-4">
-              <Folder className="w-8 h-8 text-white" />
-              <span className="text-[9px] text-white uppercase font-bold tracking-widest text-center">Empty</span>
-            </div>
-          )}
+    <div ref={setNodeRef} className="absolute inset-0 z-0 pointer-events-auto overflow-hidden">
+      <ContextMenu>
+        <ContextMenuTrigger className="w-full h-full block" />
+        <div className="absolute top-10 right-4 bottom-24 w-32 pointer-events-none z-10">
+          <div className="flex flex-col items-center gap-6 p-4">
+            {isLoading && items.length === 0 && (
+              <div className="text-[10px] text-white/40 animate-pulse font-medium uppercase tracking-tighter">Syncing...</div>
+            )}
+            {items.map((item) => (
+              <DesktopIcon 
+                key={item.id} 
+                item={item} 
+                onOpen={handleOpen} 
+                onRename={handleRename}
+                onDelete={handleDelete}
+              />
+            ))}
+          </div>
         </div>
-      </div>
-      <ContextMenuContent className="w-56 glass border-white/20">
-        <ContextMenuItem onClick={() => handleCreate('folder')} className="gap-2">
-          <FolderPlus className="w-4 h-4" /> New Folder
-        </ContextMenuItem>
-        <ContextMenuItem onClick={() => handleCreate('file')} className="gap-2">
-          <FilePlus className="w-4 h-4" /> New File
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem onClick={() => notifyVfsChange()} className="gap-2">
-          <RefreshCw className="w-4 h-4" /> Refresh Desktop
-        </ContextMenuItem>
-        <ContextMenuSeparator />
-        <ContextMenuItem onClick={() => openApp('settings', 'Settings')} className="gap-2">
-          <Play className="w-4 h-4" /> Change Wallpaper...
-        </ContextMenuItem>
-      </ContextMenuContent>
-    </ContextMenu>
+        <ContextMenuContent className="w-56 glass border-white/20">
+          <ContextMenuItem onClick={() => handleCreate('folder')} className="gap-2">
+            <FolderPlus className="w-4 h-4" /> New Folder
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => handleCreate('file')} className="gap-2">
+            <FilePlus className="w-4 h-4" /> New File
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem onClick={() => notifyVfsChange()} className="gap-2">
+            <RefreshCw className="w-4 h-4" /> Refresh Desktop
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem onClick={() => openApp('settings', 'Settings')} className="gap-2">
+            <Play className="w-4 h-4" /> Change Wallpaper...
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+    </div>
   );
 }

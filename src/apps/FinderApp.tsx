@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Folder, File, ChevronRight, Home, ArrowLeft, Plus, Trash2, FolderPlus, ImageIcon, Search, FileText, Loader2 } from 'lucide-react';
+import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { api } from '@/lib/api-client';
 import type { VFSItem } from '@shared/types';
 import { cn } from '@/lib/utils';
@@ -7,6 +8,58 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useOSStore } from '@/stores/use-os-store';
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
+interface FinderItemProps {
+  item: VFSItem;
+  onClick: (item: VFSItem) => void;
+  onDelete: (id: string) => void;
+}
+function FinderItem({ item, onClick, onDelete }: FinderItemProps) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: item.id,
+  });
+  const { setNodeRef: setDropRef, isOver } = useDroppable({
+    id: item.id,
+    disabled: item.type !== 'folder',
+  });
+  const style = transform ? {
+    transform: `translate3d(${transform.x}px, ${transform.y}px, 0)`,
+    zIndex: 100,
+  } : undefined;
+  const renderIcon = () => {
+    if (item.type === 'folder') return <Folder className="w-12 h-12 text-blue-400 fill-blue-400/20" />;
+    const isImage = IMAGE_EXTENSIONS.some(ext => item.name.toLowerCase().endsWith(ext));
+    if (isImage) return <ImageIcon className="w-12 h-12 text-pink-400 fill-pink-400/10" />;
+    if (item.name.endsWith('.txt')) return <FileText className="w-12 h-12 text-emerald-400 fill-emerald-400/10" />;
+    return <File className="w-12 h-12 text-gray-400 fill-gray-400/10" />;
+  };
+  return (
+    <div
+      ref={(node) => { setNodeRef(node); setDropRef(node); }}
+      style={style}
+      {...listeners}
+      {...attributes}
+      onDoubleClick={() => onClick(item)}
+      className={cn(
+        "group flex flex-col items-center gap-2 w-full text-center relative p-2 rounded-xl transition-all duration-200",
+        isDragging && "opacity-20 scale-90",
+        isOver && item.type === 'folder' && "bg-blue-500/20 ring-2 ring-blue-500/40"
+      )}
+    >
+      <div className="relative p-2 rounded-xl group-hover:bg-accent/50 transition-colors">
+        {renderIcon()}
+        <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
+          <button
+            onClick={(e) => { e.stopPropagation(); onDelete(item.id); }}
+            className="bg-destructive text-destructive-foreground rounded-full p-1 hover:scale-110 shadow-lg"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
+      <span className="text-[11px] font-medium leading-tight truncate w-full px-1">{item.name}</span>
+    </div>
+  );
+}
 export function FinderApp() {
   const [items, setItems] = useState<VFSItem[]>([]);
   const [currentPath, setCurrentPath] = useState<VFSItem[]>([]);
@@ -19,7 +72,6 @@ export function FinderApp() {
   const openApp = useOSStore(s => s.openApp);
   const vfsNonce = useOSStore(s => s.vfsNonce);
   const notifyVfsChange = useOSStore(s => s.notifyVfsChange);
-  const lastNonceRef = useRef(vfsNonce);
   const win = windows.find(w => w.id === activeId);
   const currentParentId = currentPath.length > 0 ? currentPath[currentPath.length - 1].id : null;
   const fetchItems = useCallback(async () => {
@@ -35,7 +87,6 @@ export function FinderApp() {
   }, [currentParentId]);
   useEffect(() => {
     fetchItems();
-    lastNonceRef.current = vfsNonce;
   }, [fetchItems, vfsNonce]);
   useEffect(() => {
     if (win?.id) {
@@ -67,9 +118,7 @@ export function FinderApp() {
             console.error("Finder deep navigation failed", err);
           }
         }
-        if (win?.id) {
-          updateWindowMetadata(win.id, { navigateTo: undefined });
-        }
+        if (win?.id) updateWindowMetadata(win.id, { navigateTo: undefined });
       };
       performNavigation();
     }
@@ -97,10 +146,7 @@ export function FinderApp() {
     const name = prompt(`Enter ${type} name:`, `New ${type}${type === 'file' ? '.txt' : ''}`);
     if (!name) return;
     try {
-      await api('/api/vfs', {
-        method: 'POST',
-        body: JSON.stringify({ name, type, parentId: currentParentId })
-      });
+      await api('/api/vfs', { method: 'POST', body: JSON.stringify({ name, type, parentId: currentParentId }) });
       notifyVfsChange();
     } catch (err) {
       console.error('Failed to create item', err);
@@ -116,13 +162,10 @@ export function FinderApp() {
     }
   };
   const filteredItems = items.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  const renderIcon = (item: VFSItem) => {
-    if (item.type === 'folder') return <Folder className="w-12 h-12 text-blue-400 fill-blue-400/20" />;
-    const isImage = IMAGE_EXTENSIONS.some(ext => item.name.toLowerCase().endsWith(ext));
-    if (isImage) return <ImageIcon className="w-12 h-12 text-pink-400 fill-pink-400/10" />;
-    if (item.name.endsWith('.txt')) return <FileText className="w-12 h-12 text-emerald-400 fill-emerald-400/10" />;
-    return <File className="w-12 h-12 text-gray-400 fill-gray-400/10" />;
-  };
+  // Droppable area for the main grid
+  const { setNodeRef: setGridDropRef, isOver: isGridOver } = useDroppable({
+    id: currentParentId || 'root-desktop',
+  });
   return (
     <div className="flex h-full bg-background text-foreground select-none">
       <div className="w-48 border-r bg-muted/20 p-4 space-y-6">
@@ -140,7 +183,7 @@ export function FinderApp() {
           </button>
         </div>
       </div>
-      <div className="flex-1 flex flex-col min-w-0">
+      <div ref={setGridDropRef} className={cn("flex-1 flex flex-col min-w-0 transition-colors duration-300", isGridOver && "bg-primary/5")}>
         <div className="h-12 border-b flex items-center justify-between px-4 bg-background/50 backdrop-blur-md shrink-0">
           <div className="flex items-center gap-3 overflow-hidden">
             <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setCurrentPath(prev => prev.slice(0, -1))} disabled={currentPath.length === 0}>
@@ -192,24 +235,12 @@ export function FinderApp() {
           ) : (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(80px,1fr))] gap-x-4 gap-y-8">
               {filteredItems.map((item) => (
-                <div
-                  key={item.id}
-                  onDoubleClick={() => handleItemClick(item)}
-                  className="group flex flex-col items-center gap-2 w-full text-center relative"
-                >
-                  <div className="relative p-2 rounded-xl group-hover:bg-accent/50 transition-colors">
-                    {renderIcon(item)}
-                    <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }}
-                        className="bg-destructive text-destructive-foreground rounded-full p-1 hover:scale-110 shadow-lg"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-                  </div>
-                  <span className="text-[11px] font-medium leading-tight truncate w-full px-1">{item.name}</span>
-                </div>
+                <FinderItem 
+                  key={item.id} 
+                  item={item} 
+                  onClick={handleItemClick} 
+                  onDelete={deleteItem} 
+                />
               ))}
             </div>
           )}

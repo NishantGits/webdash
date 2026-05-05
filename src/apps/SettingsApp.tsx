@@ -1,9 +1,8 @@
 import React, { useState } from 'react';
-import { Monitor, Palette, Info, Check, Cpu, HardDrive, ShieldCheck } from 'lucide-react';
+import { Monitor, Palette, Check } from 'lucide-react';
 import { useOSStore } from '@/stores/use-os-store';
 import { useTheme } from '@/hooks/use-theme';
 import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 const WALLPAPERS = [
   'https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?q=80&w=2070',
@@ -14,7 +13,7 @@ const WALLPAPERS = [
   'https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=2070',
 ];
 export function SettingsApp() {
-  const [activeTab, setActiveTab] = useState<'appearance' | 'wallpaper' | 'about'>('appearance');
+  const [activeTab, setActiveTab] = useState<'appearance' | 'wallpaper'>('appearance');
   const currentWallpaper = useOSStore(s => s.wallpaper);
   const setWallpaper = useOSStore(s => s.setWallpaper);
   const { isDark, toggleTheme } = useTheme();
@@ -41,16 +40,6 @@ export function SettingsApp() {
         >
           <Monitor className="w-4 h-4" />
           Wallpaper
-        </button>
-        <button
-          onClick={() => setActiveTab('about')}
-          className={cn(
-            "w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all",
-            activeTab === 'about' ? "bg-primary text-primary-foreground shadow-lg" : "hover:bg-accent/50"
-          )}
-        >
-          <Info className="w-4 h-4" />
-          About
         </button>
       </div>
       {/* Main Content */}
@@ -93,45 +82,6 @@ export function SettingsApp() {
                     )}
                   </div>
                 ))}
-              </div>
-            </div>
-          )}
-          {activeTab === 'about' && (
-            <div className="space-y-10 animate-in fade-in slide-in-from-bottom-2 duration-300">
-              <div className="flex items-center gap-6">
-                <div className="w-24 h-24 rounded-3xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-2xl flex items-center justify-center">
-                  <Monitor className="w-12 h-12 text-white" />
-                </div>
-                <div>
-                  <h1 className="text-4xl font-black">WebDash OS</h1>
-                  <p className="text-lg text-muted-foreground">Version 1.1.0-alpha (Build 2025)</p>
-                </div>
-              </div>
-              <div className="grid gap-4">
-                <div className="flex items-center gap-4 p-4 rounded-xl border bg-muted/20">
-                  <Cpu className="w-5 h-5 text-indigo-400" />
-                  <div className="flex-1">
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Processor</p>
-                    <p className="font-medium">Cloudflare Workers Runtime (V8 Isolates)</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 p-4 rounded-xl border bg-muted/20">
-                  <HardDrive className="w-5 h-5 text-emerald-400" />
-                  <div className="flex-1">
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Storage</p>
-                    <p className="font-medium">Transactional Durable Objects (Encrypted)</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-4 p-4 rounded-xl border bg-muted/20">
-                  <ShieldCheck className="w-5 h-5 text-blue-400" />
-                  <div className="flex-1">
-                    <p className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Security</p>
-                    <p className="font-medium">Sandboxed WebAssembly execution environment</p>
-                  </div>
-                </div>
-              </div>
-              <div className="text-center pt-8 border-t">
-                <p className="text-sm text-muted-foreground italic">"Cloud-native computing, redefined for the browser."</p>
               </div>
             </div>
           )}
