@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { MenuBar } from '@/components/os/MenuBar';
 import { Dock } from '@/components/os/Dock';
 import { DesktopIcons } from '@/components/os/DesktopIcons';
 import { WindowFrame } from '@/components/os/WindowFrame';
 import { LockScreen } from '@/components/os/LockScreen';
+import { Spotlight } from '@/components/os/Spotlight';
 import { useOSStore } from '@/stores/use-os-store';
 import { TerminalApp } from '@/apps/TerminalApp';
 import { AboutApp } from '@/apps/AboutApp';
@@ -13,10 +14,16 @@ import { BrowserApp } from '@/apps/BrowserApp';
 import { ImageViewerApp } from '@/apps/ImageViewerApp';
 import { TextEditorApp } from '@/apps/TextEditorApp';
 import { AnimatePresence } from 'framer-motion';
+import { useHotkeys } from 'react-hotkeys-hook';
 export function HomePage() {
   const windows = useOSStore(s => s.windows);
   const isLocked = useOSStore(s => s.isLocked);
   const wallpaper = useOSStore(s => s.wallpaper);
+  const toggleSpotlight = useOSStore(s => s.toggleSpotlight);
+  useHotkeys('mod+k', (e) => {
+    e.preventDefault();
+    toggleSpotlight();
+  });
   const renderAppContent = (type: string) => {
     switch (type) {
       case 'terminal': return <TerminalApp />;
@@ -55,6 +62,7 @@ export function HomePage() {
                 ))}
               </AnimatePresence>
             </main>
+            <Spotlight />
             <Dock />
           </div>
         )}

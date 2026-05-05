@@ -22,18 +22,25 @@ interface OSStore {
   wallpaper: string;
   desktopId: string;
   vfsNonce: number;
+  isSpotlightOpen: boolean;
+  isDockVisible: boolean;
   openApp: (appType: AppType, title: string, metadata?: any) => void;
   closeApp: (id: string) => void;
   focusWindow: (id: string) => void;
   minimizeWindow: (id: string) => void;
+  minimizeAll: () => void;
   toggleMaximize: (id: string) => void;
   updateWindowPosition: (id: string, x: number, y: number) => void;
   updateWindowSize: (id: string, width: number, height: number) => void;
   updateWindowTitle: (id: string, title: string) => void;
+  updateWindowMetadata: (id: string, metadata: any) => void;
   unlock: () => void;
   lock: () => void;
   setWallpaper: (url: string) => void;
   notifyVfsChange: () => void;
+  toggleSpotlight: () => void;
+  setSpotlight: (open: boolean) => void;
+  setDockVisible: (visible: boolean) => void;
 }
 export const useOSStore = create<OSStore>((set) => ({
   windows: [],
@@ -43,8 +50,9 @@ export const useOSStore = create<OSStore>((set) => ({
   wallpaper: 'https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?q=80&w=2070&auto=format&fit=crop',
   desktopId: 'root-desktop',
   vfsNonce: 0,
+  isSpotlightOpen: false,
+  isDockVisible: true,
   openApp: (appType, title, metadata) => set((state) => {
-    // Unique apps check (except image-viewer and text-editor which can have multiples)
     const canMultiple = ['image-viewer', 'text-editor'].includes(appType);
     const existing = !canMultiple ? state.windows.find(w => w.appType === appType) : null;
     const nextZ = state.zIndexCounter + 1;
@@ -98,6 +106,10 @@ export const useOSStore = create<OSStore>((set) => ({
     ),
     activeWindowId: state.activeWindowId === id ? null : state.activeWindowId,
   })),
+  minimizeAll: () => set((state) => ({
+    windows: state.windows.map(w => ({ ...w, isMinimized: true })),
+    activeWindowId: null,
+  })),
   toggleMaximize: (id) => set((state) => ({
     windows: state.windows.map(w => {
       if (w.id !== id) return w;
@@ -118,7 +130,7 @@ export const useOSStore = create<OSStore>((set) => ({
           x: 0,
           y: 0,
           width: window.innerWidth,
-          height: window.innerHeight - 28, 
+          height: window.innerHeight - 28,
         };
       }
     })
@@ -132,8 +144,14 @@ export const useOSStore = create<OSStore>((set) => ({
   updateWindowTitle: (id, title) => set((state) => ({
     windows: state.windows.map(w => w.id === id ? { ...w, title } : w),
   })),
+  updateWindowMetadata: (id, metadata) => set((state) => ({
+    windows: state.windows.map(w => w.id === id ? { ...w, metadata: { ...w.metadata, ...metadata } } : w),
+  })),
   unlock: () => set({ isLocked: false }),
   lock: () => set({ isLocked: true }),
   setWallpaper: (url) => set({ wallpaper: url }),
   notifyVfsChange: () => set((state) => ({ vfsNonce: state.vfsNonce + 1 })),
+  toggleSpotlight: () => set((state) => ({ isSpotlightOpen: !state.isSpotlightOpen })),
+  setSpotlight: (open) => set({ isSpotlightOpen: open }),
+  setDockVisible: (visible) => set({ isDockVisible: visible }),
 }));

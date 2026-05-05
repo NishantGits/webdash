@@ -7,15 +7,25 @@ import { useOSStore } from '@/stores/use-os-store';
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
 export function DesktopIcons() {
   const [items, setItems] = useState<VFSItem[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const desktopId = useOSStore(s => s.desktopId);
   const openApp = useOSStore(s => s.openApp);
   const vfsNonce = useOSStore(s => s.vfsNonce);
   const fetchDesktopItems = useCallback(async () => {
     try {
-      const data = await api<VFSItem[]>(`/api/vfs?parentId=${desktopId}`);
-      setItems(data);
+      // Small delay to ensure worker is ready on initial load
+      const data = await api<VFSItem[]>(`/api/vfs?parentId=${desktopId || 'root-desktop'}`);
+      if (Array.isArray(data)) {
+        setItems(data);
+        setError(null);
+      } else {
+        setItems([]);
+      }
     } catch (err) {
-      console.error('Failed to fetch desktop icons', err);
+      console.warn('[DesktopIcons] VFS fetch failed, retrying in 2s...', err);
+      setError(err instanceof Error ? err.message : 'Fetch error');
+      // Retry logic
+      setTimeout(fetchDesktopItems, 2000);
     }
   }, [desktopId]);
   useEffect(() => {
@@ -45,6 +55,9 @@ export function DesktopIcons() {
   return (
     <div className="absolute top-10 right-4 bottom-24 w-32 pointer-events-none">
       <div className="flex flex-col items-center gap-6 p-4">
+        {items.length === 0 && !error && (
+          <div className="text-[10px] text-white/40 animate-pulse">Syncing...</div>
+        )}
         {items.map((item) => (
           <motion.div
             key={item.id}
