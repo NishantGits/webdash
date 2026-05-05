@@ -19,6 +19,8 @@ export function MenuBar() {
   const minimizeAll = useOSStore(s => s.minimizeAll);
   const toggleSpotlight = useOSStore(s => s.toggleSpotlight);
   const updateWindowMetadata = useOSStore(s => s.updateWindowMetadata);
+  const toggleMaximize = useOSStore(s => s.toggleMaximize);
+  const lock = useOSStore(s => s.lock);
   const activeWindow = windows.find(w => w.id === activeId);
   const activeAppTitle = activeWindow ? activeWindow.title : 'Finder';
   useEffect(() => {
@@ -30,28 +32,28 @@ export function MenuBar() {
     if (finder) {
       updateWindowMetadata(finder.id, { navigateTo: pathId });
     } else {
-      openApp('finder', 'Finder', { initialPath: pathId });
+      openApp('finder', 'Finder', { navigateTo: pathId });
     }
   };
   return (
     <div className="fixed top-0 left-0 right-0 h-7 bg-white/40 dark:bg-black/40 backdrop-blur-md border-b border-white/20 dark:border-white/10 flex items-center justify-between px-4 z-[9999] text-[13px] font-medium select-none">
       <div className="flex items-center gap-1">
         <DropdownMenu>
-          <DropdownMenuTrigger className="p-1 hover:bg-white/20 rounded outline-none">
+          <DropdownMenuTrigger className="p-1 px-2 hover:bg-white/20 rounded outline-none transition-colors">
             <Monitor className="w-4 h-4" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent className="w-56 glass border-white/20">
+          <DropdownMenuContent className="w-56 glass border-white/20 ml-2">
             <DropdownMenuItem onClick={() => openApp('about', 'About WebDash')}>About WebDash</DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => openApp('settings', 'Settings')}>System Settings...</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => useOSStore.getState().lock()}>Lock Screen</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => lock()}>Lock Screen</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-        <span className="font-bold px-2">{activeAppTitle}</span>
+        <span className="font-bold px-3">{activeAppTitle}</span>
         <div className="hidden md:flex gap-1 text-foreground/80">
           <DropdownMenu>
-            <DropdownMenuTrigger className="px-2 py-0.5 hover:bg-white/20 rounded outline-none">File</DropdownMenuTrigger>
+            <DropdownMenuTrigger className="px-3 py-0.5 hover:bg-white/20 rounded outline-none transition-colors">File</DropdownMenuTrigger>
             <DropdownMenuContent className="w-56 glass border-white/20">
               <DropdownMenuItem onClick={() => openApp('finder', 'Finder')}>New Finder Window</DropdownMenuItem>
               <DropdownMenuItem onClick={() => openApp('terminal', 'Terminal')}>New Terminal</DropdownMenuItem>
@@ -62,7 +64,7 @@ export function MenuBar() {
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>
-            <DropdownMenuTrigger className="px-2 py-0.5 hover:bg-white/20 rounded outline-none">Edit</DropdownMenuTrigger>
+            <DropdownMenuTrigger className="px-3 py-0.5 hover:bg-white/20 rounded outline-none transition-colors">Edit</DropdownMenuTrigger>
             <DropdownMenuContent className="w-56 glass border-white/20">
               <DropdownMenuItem>Undo</DropdownMenuItem>
               <DropdownMenuItem>Redo</DropdownMenuItem>
@@ -73,7 +75,7 @@ export function MenuBar() {
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>
-            <DropdownMenuTrigger className="px-2 py-0.5 hover:bg-white/20 rounded outline-none">Go</DropdownMenuTrigger>
+            <DropdownMenuTrigger className="px-3 py-0.5 hover:bg-white/20 rounded outline-none transition-colors">Go</DropdownMenuTrigger>
             <DropdownMenuContent className="w-56 glass border-white/20">
               <DropdownMenuItem onClick={() => handleGo(null)}>Root Directory</DropdownMenuItem>
               <DropdownMenuItem onClick={() => handleGo('root-desktop')}>Desktop</DropdownMenuItem>
@@ -82,10 +84,10 @@ export function MenuBar() {
             </DropdownMenuContent>
           </DropdownMenu>
           <DropdownMenu>
-            <DropdownMenuTrigger className="px-2 py-0.5 hover:bg-white/20 rounded outline-none">Window</DropdownMenuTrigger>
+            <DropdownMenuTrigger className="px-3 py-0.5 hover:bg-white/20 rounded outline-none transition-colors">Window</DropdownMenuTrigger>
             <DropdownMenuContent className="w-56 glass border-white/20">
               <DropdownMenuItem onClick={minimizeAll}>Minimize All</DropdownMenuItem>
-              <DropdownMenuItem onClick={() => activeId && useOSStore.getState().toggleMaximize(activeId)}>Zoom</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => activeId && toggleMaximize(activeId)}>Zoom</DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
@@ -96,10 +98,10 @@ export function MenuBar() {
           <span className="text-[11px]">85%</span>
           <Battery className="w-4 h-4" />
         </div>
-        <button onClick={toggleSpotlight} className="p-1 hover:bg-white/20 rounded">
+        <button onClick={toggleSpotlight} className="p-1 px-2 hover:bg-white/20 rounded transition-colors">
           <Search className="w-4 h-4" />
         </button>
-        <span className="tabular-nums">
+        <span className="tabular-nums px-1">
           {format(time, 'EEE MMM d  h:mm aa')}
         </span>
       </div>

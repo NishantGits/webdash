@@ -14,16 +14,22 @@ import { BrowserApp } from '@/apps/BrowserApp';
 import { ImageViewerApp } from '@/apps/ImageViewerApp';
 import { TextEditorApp } from '@/apps/TextEditorApp';
 import { AnimatePresence } from 'framer-motion';
-import { useHotkeys } from 'react-hotkeys-hook';
 export function HomePage() {
   const windows = useOSStore(s => s.windows);
   const isLocked = useOSStore(s => s.isLocked);
   const wallpaper = useOSStore(s => s.wallpaper);
   const toggleSpotlight = useOSStore(s => s.toggleSpotlight);
-  useHotkeys('mod+k', (e) => {
-    e.preventDefault();
-    toggleSpotlight();
-  });
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd+K (Mac) or Ctrl+K (Win/Linux)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        toggleSpotlight();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [toggleSpotlight]);
   const renderAppContent = (type: string) => {
     switch (type) {
       case 'terminal': return <TerminalApp />;
@@ -54,7 +60,7 @@ export function HomePage() {
             <MenuBar />
             <DesktopIcons />
             <main className="relative w-full h-full pt-7 pb-20 overflow-hidden">
-              <AnimatePresence>
+              <AnimatePresence initial={false}>
                 {windows.map((win) => (
                   <WindowFrame key={win.id} window={win}>
                     {renderAppContent(win.appType)}

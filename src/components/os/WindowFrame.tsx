@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import { motion, useDragControls, AnimatePresence } from 'framer-motion';
 import { X, Minus, Maximize2 } from 'lucide-react';
 import { useOSStore, WindowState } from '@/stores/use-os-store';
@@ -18,10 +18,7 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
   const dragControls = useDragControls();
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
-  const frameRef = useRef<HTMLDivElement>(null);
   const isActive = activeId === win.id;
-  // Genie effect target (approximate dock center)
-  const genieTarget = { x: '50vw', y: '100vh', scale: 0.1, opacity: 0 };
   const handleResize = (e: React.PointerEvent, direction: 'se' | 'e' | 's') => {
     e.stopPropagation();
     setIsResizing(true);
@@ -46,21 +43,21 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
     document.addEventListener('pointermove', onPointerMove);
     document.addEventListener('pointerup', onPointerUp);
   };
-  if (win.isMinimized) return null;
   return (
     <motion.div
       layout
       initial={{ scale: 0.9, opacity: 0, y: 20 }}
       animate={{
-        scale: 1,
-        opacity: 1,
+        scale: win.isMinimized ? 0.3 : 1,
+        opacity: win.isMinimized ? 0 : 1,
         x: win.isMaximized ? 0 : win.x,
-        y: win.isMaximized ? 0 : win.y,
+        y: win.isMaximized ? 0 : (win.isMinimized ? window.innerHeight : win.y),
         width: win.isMaximized ? '100vw' : win.width,
         height: win.isMaximized ? 'calc(100vh - 28px)' : win.height,
+        pointerEvents: win.isMinimized ? 'none' : 'auto',
       }}
-      exit={genieTarget}
-      drag={!win.isMaximized && !isResizing}
+      transition={{ type: 'spring', damping: 25, stiffness: 300, mass: 0.8 }}
+      drag={!win.isMaximized && !isResizing && !win.isMinimized}
       dragControls={dragControls}
       dragListener={false}
       dragMomentum={false}
@@ -69,7 +66,6 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
         setIsDragging(false);
         updateWindowPosition(win.id, win.x + info.offset.x, win.y + info.offset.y);
       }}
-      transition={{ type: 'spring', damping: 25, stiffness: 300, mass: 0.8 }}
       style={{
         zIndex: win.zIndex,
         position: 'absolute',
@@ -84,7 +80,6 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
         "bg-white/85 dark:bg-black/70 backdrop-blur-2xl"
       )}
     >
-      {/* Title Bar */}
       <div
         className="h-9 flex items-center justify-between px-3 select-none cursor-default bg-white/5 shrink-0"
         onPointerDown={(e) => !win.isMaximized && dragControls.start(e)}
@@ -115,7 +110,6 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
         </span>
         <div className="w-24" />
       </div>
-      {/* Content Area */}
       <div className="flex-1 overflow-hidden relative">
         <AnimatePresence>
           {(isDragging || isResizing) && (
@@ -131,19 +125,18 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
           {children}
         </div>
       </div>
-      {/* Resize Handles */}
       {!win.isMaximized && (
         <>
-          <div 
-            className="absolute right-0 top-0 bottom-0 w-1 cursor-ew-resize z-[70]" 
+          <div
+            className="absolute right-0 top-0 bottom-0 w-1 cursor-ew-resize z-[70]"
             onPointerDown={(e) => handleResize(e, 'e')}
           />
-          <div 
-            className="absolute bottom-0 left-0 right-0 h-1 cursor-ns-resize z-[70]" 
+          <div
+            className="absolute bottom-0 left-0 right-0 h-1 cursor-ns-resize z-[70]"
             onPointerDown={(e) => handleResize(e, 's')}
           />
-          <div 
-            className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize z-[80]" 
+          <div
+            className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize z-[80]"
             onPointerDown={(e) => handleResize(e, 'se')}
           >
             <div className="absolute bottom-1 right-1 w-2 h-2 border-r-2 border-b-2 border-foreground/20 rounded-br-sm" />

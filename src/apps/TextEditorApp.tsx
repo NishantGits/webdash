@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '@/lib/api-client';
 import { useOSStore } from '@/stores/use-os-store';
 import type { VFSItem } from '@shared/types';
-import { cn } from '@/lib/utils';
 import { Loader2, Save, FileText } from 'lucide-react';
 export function TextEditorApp() {
   const activeId = useOSStore(s => s.activeWindowId);
@@ -11,6 +10,7 @@ export function TextEditorApp() {
   const win = windows.find(w => w.id === activeId);
   const fileId = win?.metadata?.fileId;
   const [content, setContent] = useState('');
+  const [initialContent, setInitialContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -21,10 +21,12 @@ export function TextEditorApp() {
     }
     const fetchFile = async () => {
       try {
-        const { items } = await api<{ items: VFSItem[] }>(`/api/vfs`);
+        const items = await api<VFSItem[]>(`/api/vfs`);
         const file = items.find(i => i.id === fileId);
         if (file) {
-          setContent(file.content || '');
+          const text = file.content || '';
+          setContent(text);
+          setInitialContent(text);
         }
       } catch (err) {
         console.error('Failed to load file', err);
@@ -35,13 +37,14 @@ export function TextEditorApp() {
     fetchFile();
   }, [fileId]);
   const saveFile = useCallback(async (newContent: string) => {
-    if (!fileId) return;
+    if (!fileId || newContent === initialContent) return;
     setSaving(true);
     try {
       await api(`/api/vfs/${fileId}`, {
         method: 'PUT',
         body: JSON.stringify({ content: newContent })
       });
+      setInitialContent(newContent);
       setLastSaved(new Date());
       notifyVfsChange();
     } catch (err) {
@@ -49,15 +52,15 @@ export function TextEditorApp() {
     } finally {
       setSaving(false);
     }
-  }, [fileId, notifyVfsChange]);
+  }, [fileId, notifyVfsChange, initialContent]);
   // Debounced auto-save
   useEffect(() => {
-    if (loading) return;
+    if (loading || !fileId || content === initialContent) return;
     const timer = setTimeout(() => {
       saveFile(content);
     }, 1500);
     return () => clearTimeout(timer);
-  }, [content, loading, saveFile]);
+  }, [content, loading, saveFile, fileId, initialContent]);
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
@@ -97,7 +100,7 @@ export function TextEditorApp() {
               <span>Saved at {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
             </div>
           ) : (
-            <span>Unsaved changes</span>
+            <span>{content === initialContent ? 'Saved' : 'Unsaved changes'}</span>
           )}
         </div>
       </div>

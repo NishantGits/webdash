@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import { Folder, File, ImageIcon, FileText } from 'lucide-react';
 import { api } from '@/lib/api-client';
@@ -11,21 +11,22 @@ export function DesktopIcons() {
   const desktopId = useOSStore(s => s.desktopId);
   const openApp = useOSStore(s => s.openApp);
   const vfsNonce = useOSStore(s => s.vfsNonce);
+  const retryCount = useRef(0);
   const fetchDesktopItems = useCallback(async () => {
     try {
-      // Small delay to ensure worker is ready on initial load
       const data = await api<VFSItem[]>(`/api/vfs?parentId=${desktopId || 'root-desktop'}`);
       if (Array.isArray(data)) {
         setItems(data);
         setError(null);
-      } else {
-        setItems([]);
+        retryCount.current = 0;
       }
     } catch (err) {
-      console.warn('[DesktopIcons] VFS fetch failed, retrying in 2s...', err);
+      console.warn('[DesktopIcons] VFS fetch failed', err);
       setError(err instanceof Error ? err.message : 'Fetch error');
-      // Retry logic
-      setTimeout(fetchDesktopItems, 2000);
+      if (retryCount.current < 3) {
+        retryCount.current++;
+        setTimeout(fetchDesktopItems, 2000);
+      }
     }
   }, [desktopId]);
   useEffect(() => {

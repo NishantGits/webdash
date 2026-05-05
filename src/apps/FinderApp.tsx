@@ -13,10 +13,13 @@ export function FinderApp() {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const activeWindowId = useOSStore(s => s.activeWindowId);
+  const windows = useOSStore(s => s.windows);
   const updateWindowTitle = useOSStore(s => s.updateWindowTitle);
+  const updateWindowMetadata = useOSStore(s => s.updateWindowMetadata);
   const openApp = useOSStore(s => s.openApp);
   const vfsNonce = useOSStore(s => s.vfsNonce);
   const notifyVfsChange = useOSStore(s => s.notifyVfsChange);
+  const win = windows.find(w => w.id === activeWindowId);
   const currentParentId = currentPath.length > 0 ? currentPath[currentPath.length - 1].id : null;
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -38,9 +41,25 @@ export function FinderApp() {
       updateWindowTitle(activeWindowId, title);
     }
   }, [currentPath, activeWindowId, updateWindowTitle]);
+  // Handle external navigation (from Menu Bar)
+  useEffect(() => {
+    if (win?.metadata?.navigateTo !== undefined) {
+      const targetId = win.metadata.navigateTo;
+      if (targetId === null) {
+        setCurrentPath([]);
+      } else {
+        // Resolve breadcrumbs for a given ID (simplified implementation)
+        api<VFSItem[]>(`/api/vfs`).then(all => {
+          const target = all.find(i => i.id === targetId);
+          if (target) setCurrentPath([target]);
+        });
+      }
+      updateWindowMetadata(win.id, { navigateTo: undefined });
+    }
+  }, [win?.metadata?.navigateTo, win?.id, updateWindowMetadata]);
   const handleItemClick = (item: VFSItem) => {
     if (item.type === 'folder') {
-      setCurrentPath([...currentPath, item]);
+      setCurrentPath(prev => [...prev, item]);
     } else {
       const isImage = IMAGE_EXTENSIONS.some(ext => item.name.toLowerCase().endsWith(ext));
       if (isImage) {
@@ -54,16 +73,6 @@ export function FinderApp() {
   };
   const jumpToFolder = (index: number) => {
     setCurrentPath(currentPath.slice(0, index + 1));
-  };
-  const renameItem = async (id: string, currentName: string) => {
-    const newName = prompt('Rename to:', currentName);
-    if (!newName || newName === currentName) return;
-    try {
-      await api(`/api/vfs/${id}`, { method: 'PUT', body: JSON.stringify({ name: newName }) });
-      notifyVfsChange();
-    } catch (err) {
-      alert('Failed to rename item');
-    }
   };
   const createItem = async (type: 'file' | 'folder') => {
     const name = prompt(`Enter ${type} name:`, `New ${type}${type === 'file' ? '.txt' : ''}`);
@@ -115,7 +124,7 @@ export function FinderApp() {
       <div className="flex-1 flex flex-col">
         <div className="h-12 border-b flex items-center justify-between px-4 bg-background/50 backdrop-blur-md">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentPath(currentPath.slice(0, -1))} disabled={currentPath.length === 0}>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentPath(prev => prev.slice(0, -1))} disabled={currentPath.length === 0}>
               <ArrowLeft className="w-4 h-4" />
             </Button>
             <div className="flex items-center text-[13px] gap-1 overflow-hidden">
@@ -168,12 +177,6 @@ export function FinderApp() {
                   <div className="relative p-2 rounded-xl group-hover:bg-accent/50 transition-colors">
                     {renderIcon(item)}
                     <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
-                      <button
-                        onClick={(e) => { e.stopPropagation(); renameItem(item.id, item.name); }}
-                        className="bg-primary text-primary-foreground rounded-full p-1 hover:scale-110 shadow-lg"
-                      >
-                        <Edit2 className="w-3 h-3" />
-                      </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }}
                         className="bg-destructive text-destructive-foreground rounded-full p-1 hover:scale-110 shadow-lg"
