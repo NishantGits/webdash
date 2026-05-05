@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Folder, File, ChevronRight, Home, ArrowLeft, Plus, Trash2, FolderPlus, ImageIcon, Search, FileText, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import type { VFSItem } from '@shared/types';
@@ -19,6 +19,7 @@ export function FinderApp() {
   const openApp = useOSStore(s => s.openApp);
   const vfsNonce = useOSStore(s => s.vfsNonce);
   const notifyVfsChange = useOSStore(s => s.notifyVfsChange);
+  const lastNonceRef = useRef(vfsNonce);
   const win = windows.find(w => w.id === activeId);
   const currentParentId = currentPath.length > 0 ? currentPath[currentPath.length - 1].id : null;
   const fetchItems = useCallback(async () => {
@@ -34,6 +35,7 @@ export function FinderApp() {
   }, [currentParentId]);
   useEffect(() => {
     fetchItems();
+    lastNonceRef.current = vfsNonce;
   }, [fetchItems, vfsNonce]);
   useEffect(() => {
     if (win?.id) {
@@ -51,19 +53,18 @@ export function FinderApp() {
           try {
             const target = await api<VFSItem>(`/api/vfs/${navigateTo}`);
             if (target && target.type === 'folder') {
-              // If it's a known root, just set it
-              if (['root-desktop', 'root-docs', 'root-downloads'].includes(target.id)) {
-                setCurrentPath([target]);
-              } else if (target.parentId) {
-                // Try to reconstruct one level of parent for breadcrumb context
-                const parent = await api<VFSItem>(`/api/vfs/${target.parentId}`);
-                setCurrentPath([parent, target]);
-              } else {
-                setCurrentPath([target]);
+              const chain: VFSItem[] = [target];
+              let currentId = target.parentId;
+              while (currentId) {
+                const parent = await api<VFSItem>(`/api/vfs/${currentId}`);
+                if (!parent) break;
+                chain.unshift(parent);
+                currentId = parent.parentId;
               }
+              setCurrentPath(chain);
             }
           } catch (err) {
-            console.error("Finder navigation failed", err);
+            console.error("Finder deep navigation failed", err);
           }
         }
         if (win?.id) {
@@ -72,10 +73,11 @@ export function FinderApp() {
       };
       performNavigation();
     }
-  }, [win?.metadata?.navigateTo, win?.id, updateWindowMetadata, win]);
+  }, [win?.metadata?.navigateTo, win?.id, updateWindowMetadata]);
   const handleItemClick = (item: VFSItem) => {
     if (item.type === 'folder') {
       setCurrentPath(prev => [...prev, item]);
+      setSearchQuery('');
     } else {
       const isImage = IMAGE_EXTENSIONS.some(ext => item.name.toLowerCase().endsWith(ext));
       if (isImage) {
@@ -89,6 +91,7 @@ export function FinderApp() {
   };
   const jumpToFolder = (index: number) => {
     setCurrentPath(currentPath.slice(0, index + 1));
+    setSearchQuery('');
   };
   const createItem = async (type: 'file' | 'folder') => {
     const name = prompt(`Enter ${type} name:`, `New ${type}${type === 'file' ? '.txt' : ''}`);
@@ -126,7 +129,7 @@ export function FinderApp() {
         <div className="space-y-1">
           <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest px-2 pb-1">Favorites</p>
           <button
-            onClick={() => setCurrentPath([])}
+            onClick={() => { setCurrentPath([]); setSearchQuery(''); }}
             className={cn(
               "w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm transition-colors",
               !currentParentId ? "bg-primary text-primary-foreground shadow-md" : "hover:bg-accent/50"
@@ -137,26 +140,26 @@ export function FinderApp() {
           </button>
         </div>
       </div>
-      <div className="flex-1 flex flex-col">
-        <div className="h-12 border-b flex items-center justify-between px-4 bg-background/50 backdrop-blur-md">
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentPath(prev => prev.slice(0, -1))} disabled={currentPath.length === 0}>
+      <div className="flex-1 flex flex-col min-w-0">
+        <div className="h-12 border-b flex items-center justify-between px-4 bg-background/50 backdrop-blur-md shrink-0">
+          <div className="flex items-center gap-3 overflow-hidden">
+            <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => setCurrentPath(prev => prev.slice(0, -1))} disabled={currentPath.length === 0}>
               <ArrowLeft className="w-4 h-4" />
             </Button>
             <div className="flex items-center text-[13px] gap-1 overflow-hidden">
-              <button onClick={() => setCurrentPath([])} className="hover:underline text-muted-foreground">Root</button>
+              <button onClick={() => { setCurrentPath([]); setSearchQuery(''); }} className="hover:underline text-muted-foreground">Root</button>
               {currentPath.map((p, i) => (
                 <React.Fragment key={p.id}>
-                  <ChevronRight className="w-3 h-3 text-muted-foreground" />
-                  <button onClick={() => jumpToFolder(i)} className={cn("hover:underline whitespace-nowrap", i === currentPath.length - 1 ? "font-bold text-foreground" : "text-muted-foreground")}>
+                  <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />
+                  <button onClick={() => jumpToFolder(i)} className={cn("hover:underline whitespace-nowrap truncate", i === currentPath.length - 1 ? "font-bold text-foreground" : "text-muted-foreground")}>
                     {p.name}
                   </button>
                 </React.Fragment>
               ))}
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="relative w-40">
+          <div className="flex items-center gap-3 shrink-0 ml-4">
+            <div className="relative w-32 md:w-40">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <Input
                 value={searchQuery}
@@ -187,12 +190,12 @@ export function FinderApp() {
               <p className="text-sm font-medium">No items found</p>
             </div>
           ) : (
-            <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-x-4 gap-y-8">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(80px,1fr))] gap-x-4 gap-y-8">
               {filteredItems.map((item) => (
                 <div
                   key={item.id}
                   onDoubleClick={() => handleItemClick(item)}
-                  className="group flex flex-col items-center gap-2 w-20 text-center relative"
+                  className="group flex flex-col items-center gap-2 w-full text-center relative"
                 >
                   <div className="relative p-2 rounded-xl group-hover:bg-accent/50 transition-colors">
                     {renderIcon(item)}

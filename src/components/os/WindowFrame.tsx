@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useMemo } from 'react';
 import { motion, useDragControls, AnimatePresence } from 'framer-motion';
 import { X, Minus, Maximize2 } from 'lucide-react';
 import { useOSStore, WindowState } from '@/stores/use-os-store';
@@ -17,9 +17,16 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
   const updateWindowPosition = useOSStore(s => s.updateWindowPosition);
   const activeId = useOSStore(s => s.activeWindowId);
   const dragControls = useDragControls();
+  const windowRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const isActive = activeId === win.id;
+  const dragConstraints = useMemo(() => ({
+    left: -win.width + 100,
+    right: window.innerWidth - 100,
+    top: MENU_BAR_HEIGHT,
+    bottom: window.innerHeight - 50,
+  }), [win.width]);
   const handleResize = (e: React.PointerEvent, direction: 'se' | 'e' | 's') => {
     e.stopPropagation();
     setIsResizing(true);
@@ -48,13 +55,13 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
     setIsDragging(false);
     const newX = win.x + info.offset.x;
     const newY = win.y + info.offset.y;
-    // Boundary enforcement: ensure title bar is always clickable and accessible
-    const constrainedX = Math.max(-win.width + 100, Math.min(window.innerWidth - 100, newX));
-    const constrainedY = Math.max(MENU_BAR_HEIGHT, Math.min(window.innerHeight - 50, newY));
+    const constrainedX = Math.max(dragConstraints.left, Math.min(dragConstraints.right, newX));
+    const constrainedY = Math.max(dragConstraints.top, Math.min(dragConstraints.bottom, newY));
     updateWindowPosition(win.id, constrainedX, constrainedY);
   };
   return (
     <motion.div
+      ref={windowRef}
       layout
       initial={{ scale: 0.95, opacity: 0 }}
       animate={{
@@ -76,6 +83,7 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
       dragControls={dragControls}
       dragListener={false}
       dragMomentum={false}
+      dragConstraints={dragConstraints}
       onDragStart={() => setIsDragging(true)}
       onDragEnd={handleDragEnd}
       style={{
@@ -92,8 +100,8 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
         "bg-white/90 dark:bg-[#121212]/80 backdrop-blur-3xl"
       )}
     >
-      {/* Title Bar */}
-      <div
+      <motion.div
+        layout="position"
         className="h-10 flex items-center justify-between px-4 select-none cursor-default bg-white/5 shrink-0 active:bg-white/10 transition-colors"
         onPointerDown={(e) => !win.isMaximized && dragControls.start(e)}
         onDoubleClick={() => toggleMaximize(win.id)}
@@ -122,11 +130,9 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
           {win.title}
         </span>
         <div className="w-24" />
-      </div>
-      {/* Content Area */}
-      <div className="flex-1 relative overflow-hidden">
+      </motion.div>
+      <motion.div layout className="flex-1 relative overflow-hidden">
         <AnimatePresence initial={false}>
-          {/* Focus guard: snappier transitions for inactive window masking */}
           {!isActive && (
             <motion.div
               initial={{ opacity: 0 }}
@@ -136,7 +142,6 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
               className="absolute inset-0 z-50 cursor-default bg-black/0"
             />
           )}
-          {/* Drag guard: immediate blocking for iframes */}
           {(isDragging || isResizing) && (
             <motion.div
               initial={{ opacity: 0 }}
@@ -150,8 +155,7 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
         <div className="h-full overflow-auto custom-scrollbar rounded-b-xl">
           {children}
         </div>
-      </div>
-      {/* Resize Handles */}
+      </motion.div>
       {!win.isMaximized && (
         <>
           <div

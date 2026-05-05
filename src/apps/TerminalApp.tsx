@@ -41,23 +41,30 @@ export function TerminalApp() {
         }
         case 'ls': {
           const items = await api<VFSItem[]>(`/api/vfs?parentId=${currentDirId ?? 'null'}`);
-          const display = items.map(i => `${i.type === 'folder' ? '📁' : '📄'} ${i.name} [${i.id}]`).join('\n');
+          const sorted = [...items].sort((a, b) => {
+            if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
+            return a.name.localeCompare(b.name);
+          });
+          const display = sorted.map(i => `${i.type === 'folder' ? '📁' : '📄'} ${i.name.padEnd(20)} [${i.id.slice(0, 8)}]`).join('\n');
           setLogs(prev => [...prev, { type: 'resp', text: display || '(empty directory)' }]);
           break;
         }
         case 'cd': {
-          if (!fullArgs || fullArgs === '~') {
+          if (!fullArgs || fullArgs === '~' || fullArgs === '/') {
             setCurrentDirId(null);
             setCurrentPathName('~');
           } else if (fullArgs === '..') {
-            if (currentDirId) {
+            if (!currentDirId) {
+              setLogs(prev => [...prev, { type: 'resp', text: 'sh: cd: already at root' }]);
+            } else {
               const item = await api<VFSItem>(`/api/vfs/${currentDirId}`);
-              setCurrentDirId(item.parentId);
-              if (item.parentId) {
-                const parent = await api<VFSItem>(`/api/vfs/${item.parentId}`);
-                setCurrentPathName(parent.name);
-              } else {
+              if (!item.parentId) {
+                setCurrentDirId(null);
                 setCurrentPathName('~');
+              } else {
+                const parent = await api<VFSItem>(`/api/vfs/${item.parentId}`);
+                setCurrentDirId(parent.id);
+                setCurrentPathName(parent.name);
               }
             }
           } else {
@@ -67,7 +74,8 @@ export function TerminalApp() {
               setCurrentDirId(target.id);
               setCurrentPathName(target.name);
             } else {
-              throw new Error(`cd: no such directory: ${fullArgs}`);
+              const isFile = items.find(i => (i.name === fullArgs || i.id === fullArgs) && i.type === 'file');
+              throw new Error(isFile ? `cd: ${fullArgs}: Not a directory` : `cd: no such directory: ${fullArgs}`);
             }
           }
           break;
@@ -75,8 +83,9 @@ export function TerminalApp() {
         case 'cat': {
           if (!fullArgs) throw new Error('cat: missing operand');
           const items = await api<VFSItem[]>(`/api/vfs?parentId=${currentDirId ?? 'null'}`);
-          const target = items.find(i => (i.name === fullArgs || i.id === fullArgs) && i.type === 'file');
+          const target = items.find(i => (i.name === fullArgs || i.id === fullArgs));
           if (target) {
+            if (target.type === 'folder') throw new Error(`cat: ${fullArgs}: Is a directory`);
             setLogs(prev => [...prev, { type: 'resp', text: target.content || '(empty file)' }]);
           } else {
             throw new Error(`cat: ${fullArgs}: No such file`);
@@ -105,7 +114,7 @@ export function TerminalApp() {
           break;
         }
         case 'pwd': {
-          setLogs(prev => [...prev, { type: 'resp', text: `vfs://${currentPathName} (${currentDirId ?? 'root'})` }]);
+          setLogs(prev => [...prev, { type: 'resp', text: `vfs://${currentPathName === '~' ? '/' : '/' + currentPathName}` }]);
           break;
         }
         case 'clear': {
@@ -113,7 +122,7 @@ export function TerminalApp() {
           break;
         }
         case 'neofetch': {
-          setLogs(prev => [...prev, { type: 'resp', text: 'OS: WebDash Cloud OS\nHost: Cloudflare Runtime\nKernel: Hono Worker + Durable Objects\nShell: React VFS-Shell 1.2\nUptime: 100% (Serverless)' }]);
+          setLogs(prev => [...prev, { type: 'resp', text: 'OS: WebDash Cloud OS\nHost: Cloudflare Runtime\nKernel: Hono Worker + Durable Objects\nShell: React VFS-Shell 1.2\nUptime: 100% (Serverless)\nResolution: ' + window.innerWidth + 'x' + window.innerHeight }]);
           break;
         }
         default: {
