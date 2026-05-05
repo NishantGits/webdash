@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import {
   Folder,

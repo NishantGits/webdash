@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { DndContext, PointerSensor, useSensor, useSensors, DragOverlay, DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { MenuBar } from '@/components/os/MenuBar';
 import { Dock } from '@/components/os/Dock';
