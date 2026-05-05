@@ -21,7 +21,6 @@ export function HomePage() {
   const toggleSpotlight = useOSStore(s => s.toggleSpotlight);
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Cmd+K (Mac) or Ctrl+K (Win/Linux)
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         toggleSpotlight();
@@ -56,15 +55,19 @@ export function HomePage() {
         {isLocked ? (
           <LockScreen key="lock-screen" />
         ) : (
-          <div key="desktop-env" className="relative w-full h-full">
+          <div key="desktop-env" className="relative w-full h-full overflow-hidden">
             <MenuBar />
+            {/* Desktop Layer: Icons & Background Context Menu */}
             <DesktopIcons />
-            <main className="relative w-full h-full pt-7 pb-20 overflow-hidden">
+            {/* Window Management Layer */}
+            <main className="relative w-full h-full pt-7 pb-20 overflow-hidden pointer-events-none">
               <AnimatePresence initial={false}>
                 {windows.map((win) => (
-                  <WindowFrame key={win.id} window={win}>
-                    {renderAppContent(win.appType)}
-                  </WindowFrame>
+                  <div key={win.id} className="pointer-events-auto">
+                    <WindowFrame window={win}>
+                      {renderAppContent(win.appType)}
+                    </WindowFrame>
+                  </div>
                 ))}
               </AnimatePresence>
             </main>
