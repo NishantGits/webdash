@@ -53,15 +53,16 @@ export function FinderApp() {
           const target = all.find(i => i.id === navigateTo);
           if (target) {
             // Reconstruct path if it's a known top-level folder
-            // In a real OS we'd trace parentIds back to root
             setCurrentPath([target]);
           }
         }).catch(err => console.error("Finder navigation failed", err));
       }
       // Clear metadata to prevent loop
-      updateWindowMetadata(win!.id, { navigateTo: undefined });
+      if (win?.id) {
+        updateWindowMetadata(win.id, { navigateTo: undefined });
+      }
     }
-  }, [win?.metadata?.navigateTo, win?.id, updateWindowMetadata]);
+  }, [win?.metadata?.navigateTo, win?.id, updateWindowMetadata, win]);
   const handleItemClick = (item: VFSItem) => {
     if (item.type === 'folder') {
       setCurrentPath(prev => [...prev, item]);
