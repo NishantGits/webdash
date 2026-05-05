@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Folder, File, ImageIcon } from 'lucide-react';
+import { Folder, File, ImageIcon, FileText } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import type { VFSItem } from '@shared/types';
 import { useOSStore } from '@/stores/use-os-store';
@@ -9,17 +9,18 @@ export function DesktopIcons() {
   const [items, setItems] = useState<VFSItem[]>([]);
   const desktopId = useOSStore(s => s.desktopId);
   const openApp = useOSStore(s => s.openApp);
-  useEffect(() => {
-    const fetchDesktopItems = async () => {
-      try {
-        const data = await api<VFSItem[]>(`/api/vfs?parentId=${desktopId}`);
-        setItems(data);
-      } catch (err) {
-        console.error('Failed to fetch desktop icons', err);
-      }
-    };
-    fetchDesktopItems();
+  const vfsNonce = useOSStore(s => s.vfsNonce);
+  const fetchDesktopItems = useCallback(async () => {
+    try {
+      const data = await api<VFSItem[]>(`/api/vfs?parentId=${desktopId}`);
+      setItems(data);
+    } catch (err) {
+      console.error('Failed to fetch desktop icons', err);
+    }
   }, [desktopId]);
+  useEffect(() => {
+    fetchDesktopItems();
+  }, [fetchDesktopItems, vfsNonce]);
   const handleDoubleClick = (item: VFSItem) => {
     if (item.type === 'folder') {
       openApp('finder', item.name, { initialPath: item.id });
@@ -27,6 +28,8 @@ export function DesktopIcons() {
       const isImage = IMAGE_EXTENSIONS.some(ext => item.name.toLowerCase().endsWith(ext));
       if (isImage) {
         openApp('image-viewer', `Image - ${item.name}`, { url: item.content });
+      } else if (item.name.endsWith('.txt') || !item.name.includes('.')) {
+        openApp('text-editor', `Edit - ${item.name}`, { fileId: item.id });
       } else {
         openApp('terminal', `Terminal - ${item.name}`);
       }
@@ -36,6 +39,7 @@ export function DesktopIcons() {
     if (item.type === 'folder') return <Folder className="w-10 h-10 text-blue-400 fill-blue-400/20" />;
     const isImage = IMAGE_EXTENSIONS.some(ext => item.name.toLowerCase().endsWith(ext));
     if (isImage) return <ImageIcon className="w-10 h-10 text-pink-400 fill-pink-400/10" />;
+    if (item.name.endsWith('.txt')) return <FileText className="w-10 h-10 text-emerald-400 fill-emerald-400/10" />;
     return <File className="w-10 h-10 text-white/80" />;
   };
   return (

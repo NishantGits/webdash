@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-export type AppType = 'terminal' | 'about' | 'browser' | 'settings' | 'finder' | 'image-viewer';
+export type AppType = 'terminal' | 'about' | 'browser' | 'settings' | 'finder' | 'image-viewer' | 'text-editor';
 export interface WindowState {
   id: string;
   title: string;
@@ -21,6 +21,7 @@ interface OSStore {
   isLocked: boolean;
   wallpaper: string;
   desktopId: string;
+  vfsNonce: number;
   openApp: (appType: AppType, title: string, metadata?: any) => void;
   closeApp: (id: string) => void;
   focusWindow: (id: string) => void;
@@ -32,6 +33,7 @@ interface OSStore {
   unlock: () => void;
   lock: () => void;
   setWallpaper: (url: string) => void;
+  notifyVfsChange: () => void;
 }
 export const useOSStore = create<OSStore>((set) => ({
   windows: [],
@@ -40,8 +42,11 @@ export const useOSStore = create<OSStore>((set) => ({
   isLocked: true,
   wallpaper: 'https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?q=80&w=2070&auto=format&fit=crop',
   desktopId: 'root-desktop',
+  vfsNonce: 0,
   openApp: (appType, title, metadata) => set((state) => {
-    const existing = state.windows.find(w => w.appType === appType && appType !== 'image-viewer');
+    // Unique apps check (except image-viewer and text-editor which can have multiples)
+    const canMultiple = ['image-viewer', 'text-editor'].includes(appType);
+    const existing = !canMultiple ? state.windows.find(w => w.appType === appType) : null;
     const nextZ = state.zIndexCounter + 1;
     if (existing) {
       return {
@@ -57,10 +62,10 @@ export const useOSStore = create<OSStore>((set) => ({
       id,
       title,
       appType,
-      x: 100 + (state.windows.filter(w => !w.isMaximized).length * 40),
-      y: 100 + (state.windows.filter(w => !w.isMaximized).length * 40),
-      width: appType === 'finder' ? 800 : appType === 'browser' ? 900 : 600,
-      height: appType === 'finder' ? 500 : appType === 'browser' ? 600 : 400,
+      x: 100 + (state.windows.length * 40) % 300,
+      y: 100 + (state.windows.length * 40) % 300,
+      width: appType === 'finder' ? 800 : appType === 'browser' ? 900 : appType === 'text-editor' ? 700 : 600,
+      height: appType === 'finder' ? 500 : appType === 'browser' ? 600 : appType === 'text-editor' ? 500 : 400,
       isMinimized: false,
       isMaximized: false,
       zIndex: nextZ,
@@ -113,7 +118,7 @@ export const useOSStore = create<OSStore>((set) => ({
           x: 0,
           y: 0,
           width: window.innerWidth,
-          height: window.innerHeight - 28, // Subtract MenuBar height
+          height: window.innerHeight - 28, 
         };
       }
     })
@@ -130,4 +135,5 @@ export const useOSStore = create<OSStore>((set) => ({
   unlock: () => set({ isLocked: false }),
   lock: () => set({ isLocked: true }),
   setWallpaper: (url) => set({ wallpaper: url }),
+  notifyVfsChange: () => set((state) => ({ vfsNonce: state.vfsNonce + 1 })),
 }));

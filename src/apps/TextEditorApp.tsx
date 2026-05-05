@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { api } from '@/lib/api-client';
 import { useOSStore } from '@/stores/use-os-store';
-import { useVfsStore } from '@/stores/use-vfs-store';
+import type { VFSItem } from '@shared/types';
+import { cn } from '@/lib/utils';
 import { Loader2, Save, FileText } from 'lucide-react';
 export function TextEditorApp() {
   const activeId = useOSStore(s => s.activeWindowId);
   const windows = useOSStore(s => s.windows);
+  const notifyVfsChange = useOSStore(s => s.notifyVfsChange);
   const win = windows.find(w => w.id === activeId);
   const fileId = win?.metadata?.fileId;
-  const allItems = useVfsStore(s => s.items);
-  const updateItem = useVfsStore(s => s.updateItem);
   const [content, setContent] = useState('');
-  const [initialContent, setInitialContent] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -19,34 +19,50 @@ export function TextEditorApp() {
       setLoading(false);
       return;
     }
-    const file = allItems.find(i => i.id === fileId);
-    if (file) {
-      const text = file.content || '';
-      setContent(text);
-      setInitialContent(text);
-    }
-    setLoading(false);
-  }, [fileId, allItems]);
-  const saveFile = useCallback((newContent: string) => {
-    if (!fileId || newContent === initialContent) return;
+    const fetchFile = async () => {
+      try {
+        const { items } = await api<{ items: VFSItem[] }>(`/api/vfs`);
+        const file = items.find(i => i.id === fileId);
+        if (file) {
+          setContent(file.content || '');
+        }
+      } catch (err) {
+        console.error('Failed to load file', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchFile();
+  }, [fileId]);
+  const saveFile = useCallback(async (newContent: string) => {
+    if (!fileId) return;
     setSaving(true);
-    updateItem(fileId, { content: newContent });
-    setInitialContent(newContent);
-    setLastSaved(new Date());
-    setSaving(false);
-  }, [fileId, initialContent, updateItem]);
+    try {
+      await api(`/api/vfs/${fileId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ content: newContent })
+      });
+      setLastSaved(new Date());
+      notifyVfsChange();
+    } catch (err) {
+      console.error('Failed to save file', err);
+    } finally {
+      setSaving(false);
+    }
+  }, [fileId, notifyVfsChange]);
+  // Debounced auto-save
   useEffect(() => {
-    if (loading || !fileId || content === initialContent) return;
+    if (loading) return;
     const timer = setTimeout(() => {
       saveFile(content);
     }, 1500);
     return () => clearTimeout(timer);
-  }, [content, loading, saveFile, fileId, initialContent]);
+  }, [content, loading, saveFile]);
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground/50 gap-3">
-        <Loader2 className="w-8 h-8 animate-spin" />
-        <p className="text-xs font-medium uppercase tracking-widest">Opening Document</p>
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
+        <Loader2 className="w-6 h-6 animate-spin" />
+        <p className="text-xs">Opening document...</p>
       </div>
     );
   }
@@ -56,31 +72,32 @@ export function TextEditorApp() {
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          className="w-full h-full p-8 bg-transparent outline-none resize-none font-mono text-[14px] leading-relaxed custom-scrollbar"
+          className="w-full h-full p-6 bg-transparent outline-none resize-none font-mono text-sm leading-relaxed"
           placeholder="Start typing..."
           spellCheck={false}
         />
       </div>
-      <div className="h-9 border-t bg-muted/30 px-4 flex items-center justify-between text-[11px] text-muted-foreground select-none">
+      <div className="h-8 border-t bg-muted/30 px-4 flex items-center justify-between text-[11px] text-muted-foreground">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5 font-medium">
-            <FileText className="w-3.5 h-3.5" />
-            <span>{content.length} chars</span>
+          <div className="flex items-center gap-1.5">
+            <FileText className="w-3 h-3" />
+            <span>{content.length} characters</span>
           </div>
+          <span>{content.split(/\s+/).filter(Boolean).length} words</span>
         </div>
         <div className="flex items-center gap-2">
           {saving ? (
-            <div className="flex items-center gap-2 text-primary animate-pulse font-bold uppercase tracking-tighter">
+            <div className="flex items-center gap-1">
               <Loader2 className="w-3 h-3 animate-spin" />
-              <span>Saving</span>
+              <span>Saving...</span>
             </div>
           ) : lastSaved ? (
-            <div className="flex items-center gap-1.5 text-emerald-500 font-medium">
+            <div className="flex items-center gap-1 text-emerald-500">
               <Save className="w-3 h-3" />
-              <span>Saved {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              <span>Saved at {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
             </div>
           ) : (
-            <span className="font-medium">{content === initialContent ? 'Locally Synced' : 'Changes Pending'}</span>
+            <span>Unsaved changes</span>
           )}
         </div>
       </div>

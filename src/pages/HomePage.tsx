@@ -11,6 +11,7 @@ import { FinderApp } from '@/apps/FinderApp';
 import { SettingsApp } from '@/apps/SettingsApp';
 import { BrowserApp } from '@/apps/BrowserApp';
 import { ImageViewerApp } from '@/apps/ImageViewerApp';
+import { TextEditorApp } from '@/apps/TextEditorApp';
 import { AnimatePresence } from 'framer-motion';
 export function HomePage() {
   const windows = useOSStore(s => s.windows);
@@ -24,6 +25,7 @@ export function HomePage() {
       case 'settings': return <SettingsApp />;
       case 'browser': return <BrowserApp />;
       case 'image-viewer': return <ImageViewerApp />;
+      case 'text-editor': return <TextEditorApp />;
       default: return (
         <div className="flex items-center justify-center h-full text-muted-foreground p-10 text-center">
           This app is under development.

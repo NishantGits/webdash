@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { api } from '@/lib/api-client';
+import { useOSStore } from '@/stores/use-os-store';
 import type { VFSItem } from '@shared/types';
 interface Log {
   type: 'cmd' | 'resp';
@@ -13,6 +14,7 @@ export function TerminalApp() {
   const [input, setInput] = useState('');
   const [currentDirId, setCurrentDirId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const notifyVfsChange = useOSStore(s => s.notifyVfsChange);
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
@@ -21,44 +23,56 @@ export function TerminalApp() {
     const rawInput = input.trim();
     if (!rawInput) return;
     setLogs(prev => [...prev, { type: 'cmd', text: rawInput }]);
-    const [cmd, ...args] = rawInput.toLowerCase().split(' ');
+    const [cmd] = rawInput.toLowerCase().split(' ');
     const fullArgs = rawInput.split(' ').slice(1).join(' ');
     try {
       switch (cmd) {
-        case 'help':
+        case 'help': {
           setLogs(prev => [...prev, { type: 'resp', text: 'Commands: ls, mkdir [name], touch [name], rm [id], pwd, clear, neofetch' }]);
           break;
-        case 'ls':
+        }
+        case 'ls': {
           const items = await api<VFSItem[]>(`/api/vfs?parentId=${currentDirId ?? 'null'}`);
           const display = items.map(i => `${i.type === 'folder' ? '📁' : '📄'} ${i.name} (id: ${i.id})`).join('\n');
           setLogs(prev => [...prev, { type: 'resp', text: display || 'Directory is empty' }]);
           break;
-        case 'mkdir':
+        }
+        case 'mkdir': {
           if (!fullArgs) throw new Error('mkdir: missing operand');
           await api('/api/vfs', { method: 'POST', body: JSON.stringify({ name: fullArgs, type: 'folder', parentId: currentDirId }) });
           setLogs(prev => [...prev, { type: 'resp', text: `Created folder: ${fullArgs}` }]);
+          notifyVfsChange();
           break;
-        case 'touch':
+        }
+        case 'touch': {
           if (!fullArgs) throw new Error('touch: missing operand');
           await api('/api/vfs', { method: 'POST', body: JSON.stringify({ name: fullArgs, type: 'file', parentId: currentDirId, content: '' }) });
           setLogs(prev => [...prev, { type: 'resp', text: `Created file: ${fullArgs}` }]);
+          notifyVfsChange();
           break;
-        case 'rm':
+        }
+        case 'rm': {
           if (!fullArgs) throw new Error('rm: missing operand (provide ID)');
           await api(`/api/vfs/${fullArgs}`, { method: 'DELETE' });
           setLogs(prev => [...prev, { type: 'resp', text: `Deleted item: ${fullArgs}` }]);
+          notifyVfsChange();
           break;
-        case 'pwd':
+        }
+        case 'pwd': {
           setLogs(prev => [...prev, { type: 'resp', text: `Current Path ID: ${currentDirId ?? '/'}` }]);
           break;
-        case 'clear':
+        }
+        case 'clear': {
           setLogs([]);
           break;
-        case 'neofetch':
+        }
+        case 'neofetch': {
           setLogs(prev => [...prev, { type: 'resp', text: 'OS: WebDash Cloud OS\nHost: Cloudflare Runtime\nShell: React VFS Shell\nMemory: 128MB (Virtual)' }]);
           break;
-        default:
+        }
+        default: {
           setLogs(prev => [...prev, { type: 'resp', text: `sh: command not found: ${cmd}` }]);
+        }
       }
     } catch (err: any) {
       setLogs(prev => [...prev, { type: 'resp', text: `error: ${err.message}` }]);

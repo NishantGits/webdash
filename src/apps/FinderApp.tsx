@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Folder, File, ChevronRight, Home, ArrowLeft, Plus, Trash2, FolderPlus, ImageIcon, Search, Edit2 } from 'lucide-react';
+import { Folder, File, ChevronRight, Home, ArrowLeft, Plus, Trash2, FolderPlus, ImageIcon, Search, Edit2, FileText } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import type { VFSItem } from '@shared/types';
 import { cn } from '@/lib/utils';
@@ -15,6 +15,8 @@ export function FinderApp() {
   const activeWindowId = useOSStore(s => s.activeWindowId);
   const updateWindowTitle = useOSStore(s => s.updateWindowTitle);
   const openApp = useOSStore(s => s.openApp);
+  const vfsNonce = useOSStore(s => s.vfsNonce);
+  const notifyVfsChange = useOSStore(s => s.notifyVfsChange);
   const currentParentId = currentPath.length > 0 ? currentPath[currentPath.length - 1].id : null;
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -29,11 +31,13 @@ export function FinderApp() {
   }, [currentParentId]);
   useEffect(() => {
     fetchItems();
+  }, [fetchItems, vfsNonce]);
+  useEffect(() => {
     if (activeWindowId) {
       const title = currentPath.length > 0 ? currentPath[currentPath.length - 1].name : 'Finder';
       updateWindowTitle(activeWindowId, title);
     }
-  }, [currentParentId, currentPath, activeWindowId, updateWindowTitle, fetchItems]);
+  }, [currentPath, activeWindowId, updateWindowTitle]);
   const handleItemClick = (item: VFSItem) => {
     if (item.type === 'folder') {
       setCurrentPath([...currentPath, item]);
@@ -41,6 +45,8 @@ export function FinderApp() {
       const isImage = IMAGE_EXTENSIONS.some(ext => item.name.toLowerCase().endsWith(ext));
       if (isImage) {
         openApp('image-viewer', `Image - ${item.name}`, { url: item.content });
+      } else if (item.name.endsWith('.txt') || !item.name.includes('.')) {
+        openApp('text-editor', `Edit - ${item.name}`, { fileId: item.id });
       } else {
         openApp('terminal', `Terminal - ${item.name}`);
       }
@@ -54,7 +60,7 @@ export function FinderApp() {
     if (!newName || newName === currentName) return;
     try {
       await api(`/api/vfs/${id}`, { method: 'PUT', body: JSON.stringify({ name: newName }) });
-      fetchItems();
+      notifyVfsChange();
     } catch (err) {
       alert('Failed to rename item');
     }
@@ -67,7 +73,7 @@ export function FinderApp() {
         method: 'POST',
         body: JSON.stringify({ name, type, parentId: currentParentId })
       });
-      fetchItems();
+      notifyVfsChange();
     } catch (err) {
       alert('Failed to create item');
     }
@@ -76,7 +82,7 @@ export function FinderApp() {
     if (!confirm('Are you sure you want to delete this?')) return;
     try {
       await api(`/api/vfs/${id}`, { method: 'DELETE' });
-      fetchItems();
+      notifyVfsChange();
     } catch (err) {
       alert('Failed to delete item');
     }
@@ -86,6 +92,7 @@ export function FinderApp() {
     if (item.type === 'folder') return <Folder className="w-12 h-12 text-blue-400 fill-blue-400/20" />;
     const isImage = IMAGE_EXTENSIONS.some(ext => item.name.toLowerCase().endsWith(ext));
     if (isImage) return <ImageIcon className="w-12 h-12 text-pink-400 fill-pink-400/10" />;
+    if (item.name.endsWith('.txt')) return <FileText className="w-12 h-12 text-emerald-400 fill-emerald-400/10" />;
     return <File className="w-12 h-12 text-gray-400 fill-gray-400/10" />;
   };
   return (
@@ -97,28 +104,22 @@ export function FinderApp() {
             onClick={() => setCurrentPath([])}
             className={cn(
               "w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm transition-colors",
-              !currentParentId ? "bg-primary text-primary-foreground" : "hover:bg-accent/50"
+              !currentParentId ? "bg-primary text-primary-foreground shadow-md" : "hover:bg-accent/50"
             )}
           >
             <Home className="w-4 h-4" />
-            <span>AirDrop</span>
-          </button>
-          <button className="w-full flex items-center gap-2.5 px-3 py-1.5 rounded-lg text-sm hover:bg-accent/50">
-            <File className="w-4 h-4 text-blue-500" />
-            <span>Recents</span>
+            <span>VFS Root</span>
           </button>
         </div>
       </div>
       <div className="flex-1 flex flex-col">
         <div className="h-12 border-b flex items-center justify-between px-4 bg-background/50 backdrop-blur-md">
           <div className="flex items-center gap-3">
-            <div className="flex gap-1">
-              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentPath(currentPath.slice(0, -1))} disabled={currentPath.length === 0}>
-                <ArrowLeft className="w-4 h-4" />
-              </Button>
-            </div>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setCurrentPath(currentPath.slice(0, -1))} disabled={currentPath.length === 0}>
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
             <div className="flex items-center text-[13px] gap-1 overflow-hidden">
-              <button onClick={() => setCurrentPath([])} className="hover:underline text-muted-foreground">VFS Root</button>
+              <button onClick={() => setCurrentPath([])} className="hover:underline text-muted-foreground">Root</button>
               {currentPath.map((p, i) => (
                 <React.Fragment key={p.id}>
                   <ChevronRight className="w-3 h-3 text-muted-foreground" />
@@ -132,11 +133,11 @@ export function FinderApp() {
           <div className="flex items-center gap-3">
             <div className="relative w-40">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input 
+              <Input
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder="Search" 
-                className="h-7 pl-8 text-xs bg-muted/40" 
+                placeholder="Search"
+                className="h-7 pl-8 text-xs bg-muted/40 border-none"
               />
             </div>
             <div className="h-6 w-[1px] bg-border mx-1" />
@@ -154,7 +155,7 @@ export function FinderApp() {
           ) : filteredItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
               <Search className="w-12 h-12 opacity-10" />
-              <p className="text-sm italic">No items found</p>
+              <p className="text-sm italic">Empty Folder</p>
             </div>
           ) : (
             <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-x-4 gap-y-8">
@@ -166,16 +167,16 @@ export function FinderApp() {
                 >
                   <div className="relative p-2 rounded-xl group-hover:bg-accent/50 transition-colors">
                     {renderIcon(item)}
-                    <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <div className="absolute -top-1 -right-1 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-10">
                       <button
                         onClick={(e) => { e.stopPropagation(); renameItem(item.id, item.name); }}
-                        className="bg-primary text-primary-foreground rounded-full p-1 hover:scale-110"
+                        className="bg-primary text-primary-foreground rounded-full p-1 hover:scale-110 shadow-lg"
                       >
                         <Edit2 className="w-3 h-3" />
                       </button>
                       <button
                         onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }}
-                        className="bg-destructive text-destructive-foreground rounded-full p-1 hover:scale-110"
+                        className="bg-destructive text-destructive-foreground rounded-full p-1 hover:scale-110 shadow-lg"
                       >
                         <Trash2 className="w-3 h-3" />
                       </button>
