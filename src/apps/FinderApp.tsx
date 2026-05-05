@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Folder, File, ChevronRight, Home, ArrowLeft, Plus, Trash2, FolderPlus, ImageIcon, Search, FileText, Loader2 } from 'lucide-react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
-import { api } from '@/lib/api-client';
 import type { VFSItem } from '@shared/types';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useOSStore } from '@/stores/use-os-store';
+import { useVfsStore } from '@/stores/use-vfs-store';
 const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
 interface FinderItemProps {
   item: VFSItem;
@@ -61,33 +61,21 @@ function FinderItem({ item, onClick, onDelete }: FinderItemProps) {
   );
 }
 export function FinderApp() {
-  const [items, setItems] = useState<VFSItem[]>([]);
   const [currentPath, setCurrentPath] = useState<VFSItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const allItems = useVfsStore(s => s.items);
+  const createItem = useVfsStore(s => s.createItem);
+  const deleteItem = useVfsStore(s => s.deleteItem);
   const activeId = useOSStore(s => s.activeWindowId);
   const windows = useOSStore(s => s.windows);
   const updateWindowTitle = useOSStore(s => s.updateWindowTitle);
   const updateWindowMetadata = useOSStore(s => s.updateWindowMetadata);
   const openApp = useOSStore(s => s.openApp);
-  const vfsNonce = useOSStore(s => s.vfsNonce);
-  const notifyVfsChange = useOSStore(s => s.notifyVfsChange);
   const win = windows.find(w => w.id === activeId);
   const currentParentId = currentPath.length > 0 ? currentPath[currentPath.length - 1].id : null;
-  const fetchItems = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await api<VFSItem[]>(`/api/vfs?parentId=${currentParentId ?? 'null'}`);
-      setItems(data);
-    } catch (err) {
-      console.error('Failed to fetch VFS items', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [currentParentId]);
-  useEffect(() => {
-    fetchItems();
-  }, [fetchItems, vfsNonce]);
+  const displayItems = useMemo(() => {
+    return allItems.filter(item => item.parentId === currentParentId);
+  }, [allItems, currentParentId]);
   useEffect(() => {
     if (win?.id) {
       const title = currentPath.length > 0 ? currentPath[currentPath.length - 1].name : 'Finder';
@@ -97,32 +85,25 @@ export function FinderApp() {
   useEffect(() => {
     const navigateTo = win?.metadata?.navigateTo;
     if (navigateTo !== undefined) {
-      const performNavigation = async () => {
-        if (navigateTo === null) {
-          setCurrentPath([]);
-        } else {
-          try {
-            const target = await api<VFSItem>(`/api/vfs/${navigateTo}`);
-            if (target && target.type === 'folder') {
-              const chain: VFSItem[] = [target];
-              let currentId = target.parentId;
-              while (currentId) {
-                const parent = await api<VFSItem>(`/api/vfs/${currentId}`);
-                if (!parent) break;
-                chain.unshift(parent);
-                currentId = parent.parentId;
-              }
-              setCurrentPath(chain);
-            }
-          } catch (err) {
-            console.error("Finder deep navigation failed", err);
+      if (navigateTo === null) {
+        setCurrentPath([]);
+      } else {
+        const target = allItems.find(i => i.id === navigateTo);
+        if (target && target.type === 'folder') {
+          const chain: VFSItem[] = [target];
+          let parentId = target.parentId;
+          while (parentId) {
+            const parent = allItems.find(i => i.id === parentId);
+            if (!parent) break;
+            chain.unshift(parent);
+            parentId = parent.parentId;
           }
+          setCurrentPath(chain);
         }
-        if (win?.id) updateWindowMetadata(win.id, { navigateTo: undefined });
-      };
-      performNavigation();
+      }
+      if (win?.id) updateWindowMetadata(win.id, { navigateTo: undefined });
     }
-  }, [win?.metadata?.navigateTo, win?.id, updateWindowMetadata]);
+  }, [win?.metadata?.navigateTo, win?.id, updateWindowMetadata, allItems]);
   const handleItemClick = (item: VFSItem) => {
     if (item.type === 'folder') {
       setCurrentPath(prev => [...prev, item]);
@@ -142,27 +123,16 @@ export function FinderApp() {
     setCurrentPath(currentPath.slice(0, index + 1));
     setSearchQuery('');
   };
-  const createItem = async (type: 'file' | 'folder') => {
+  const handleCreate = (type: 'file' | 'folder') => {
     const name = prompt(`Enter ${type} name:`, `New ${type}${type === 'file' ? '.txt' : ''}`);
     if (!name) return;
-    try {
-      await api('/api/vfs', { method: 'POST', body: JSON.stringify({ name, type, parentId: currentParentId }) });
-      notifyVfsChange();
-    } catch (err) {
-      console.error('Failed to create item', err);
-    }
+    createItem({ name, type, parentId: currentParentId });
   };
-  const deleteItem = async (id: string) => {
+  const handleDelete = (id: string) => {
     if (!confirm('Are you sure you want to delete this?')) return;
-    try {
-      await api(`/api/vfs/${id}`, { method: 'DELETE' });
-      notifyVfsChange();
-    } catch (err) {
-      console.error('Failed to delete item', err);
-    }
+    deleteItem(id);
   };
-  const filteredItems = items.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  // Droppable area for the main grid
+  const filteredItems = displayItems.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()));
   const { setNodeRef: setGridDropRef, isOver: isGridOver } = useDroppable({
     id: currentParentId || 'root-desktop',
   });
@@ -212,20 +182,16 @@ export function FinderApp() {
               />
             </div>
             <div className="h-6 w-[1px] bg-border mx-1" />
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => createItem('folder')}>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCreate('folder')}>
               <FolderPlus className="w-4 h-4" />
             </Button>
-            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => createItem('file')}>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleCreate('file')}>
               <Plus className="w-4 h-4" />
             </Button>
           </div>
         </div>
         <div className="flex-1 p-6 overflow-y-auto">
-          {loading ? (
-            <div className="flex items-center justify-center h-full">
-              <Loader2 className="w-8 h-8 animate-spin text-primary/30" />
-            </div>
-          ) : filteredItems.length === 0 ? (
+          {filteredItems.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full text-muted-foreground/40 gap-4">
               <div className="p-8 rounded-full bg-muted/20 border border-dashed border-border/50">
                 <Search className="w-12 h-12" />
@@ -235,11 +201,11 @@ export function FinderApp() {
           ) : (
             <div className="grid grid-cols-[repeat(auto-fill,minmax(80px,1fr))] gap-x-4 gap-y-8">
               {filteredItems.map((item) => (
-                <FinderItem 
-                  key={item.id} 
-                  item={item} 
-                  onClick={handleItemClick} 
-                  onDelete={deleteItem} 
+                <FinderItem
+                  key={item.id}
+                  item={item}
+                  onClick={handleItemClick}
+                  onDelete={handleDelete}
                 />
               ))}
             </div>

@@ -1,5 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { motion } from 'framer-motion';
+import React, { useMemo } from 'react';
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import {
   Folder,
@@ -14,9 +13,9 @@ import {
   ExternalLink,
   Play
 } from 'lucide-react';
-import { api } from '@/lib/api-client';
 import type { VFSItem } from '@shared/types';
 import { useOSStore } from '@/stores/use-os-store';
+import { useVfsStore } from '@/stores/use-vfs-store';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -56,7 +55,7 @@ function DesktopIcon({ item, onOpen, onRename, onDelete }: DesktopIconProps) {
   return (
     <ContextMenu>
       <ContextMenuTrigger className="pointer-events-auto">
-        <div 
+        <div
           ref={(node) => { setNodeRef(node); setDropRef(node); }}
           style={style}
           {...listeners}
@@ -95,27 +94,16 @@ function DesktopIcon({ item, onOpen, onRename, onDelete }: DesktopIconProps) {
   );
 }
 export function DesktopIcons() {
-  const [items, setItems] = useState<VFSItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const desktopId = useOSStore(s => s.desktopId);
   const openApp = useOSStore(s => s.openApp);
-  const vfsNonce = useOSStore(s => s.vfsNonce);
-  const notifyVfsChange = useOSStore(s => s.notifyVfsChange);
+  const allItems = useVfsStore(s => s.items);
+  const createItem = useVfsStore(s => s.createItem);
+  const updateItem = useVfsStore(s => s.updateItem);
+  const deleteItem = useVfsStore(s => s.deleteItem);
+  const desktopItems = useMemo(() => {
+    return allItems.filter(i => i.parentId === (desktopId || 'root-desktop'));
+  }, [allItems, desktopId]);
   const { setNodeRef } = useDroppable({ id: desktopId || 'root-desktop' });
-  const fetchDesktopItems = useCallback(async () => {
-    try {
-      const targetParent = desktopId || 'root-desktop';
-      const data = await api<VFSItem[]>(`/api/vfs?parentId=${targetParent}`);
-      setItems(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error('[DesktopIcons] Failed to sync volume');
-    } finally {
-      setIsLoading(false);
-    }
-  }, [desktopId]);
-  useEffect(() => {
-    fetchDesktopItems();
-  }, [fetchDesktopItems, vfsNonce]);
   const handleOpen = (item: VFSItem) => {
     if (item.type === 'folder') {
       openApp('finder', item.name, { navigateTo: item.id });
@@ -130,40 +118,22 @@ export function DesktopIcons() {
       }
     }
   };
-  const handleCreate = async (type: 'file' | 'folder') => {
+  const handleCreate = (type: 'file' | 'folder') => {
     const name = prompt(`Enter ${type} name:`, `New ${type}${type === 'file' ? '.txt' : ''}`);
     if (!name) return;
-    try {
-      await api('/api/vfs', {
-        method: 'POST',
-        body: JSON.stringify({ name, type, parentId: desktopId || 'root-desktop' })
-      });
-      notifyVfsChange();
-      toast.success(`${type === 'folder' ? 'Folder' : 'File'} created`);
-    } catch (err) {
-      toast.error('Failed to create item');
-    }
+    createItem({ name, type, parentId: desktopId || 'root-desktop' });
+    toast.success(`${type} created`);
   };
-  const handleRename = async (item: VFSItem) => {
+  const handleRename = (item: VFSItem) => {
     const newName = prompt('Rename item:', item.name);
     if (!newName || newName === item.name) return;
-    try {
-      await api(`/api/vfs/${item.id}`, { method: 'PUT', body: JSON.stringify({ name: newName }) });
-      notifyVfsChange();
-      toast.success('Item renamed');
-    } catch (err) {
-      toast.error('Failed to rename item');
-    }
+    updateItem(item.id, { name: newName });
+    toast.success('Renamed');
   };
-  const handleDelete = async (item: VFSItem) => {
-    if (!confirm(`Are you sure you want to delete "${item.name}"?`)) return;
-    try {
-      await api(`/api/vfs/${item.id}`, { method: 'DELETE' });
-      notifyVfsChange();
-      toast.success('Item deleted');
-    } catch (err) {
-      toast.error('Failed to delete item');
-    }
+  const handleDelete = (item: VFSItem) => {
+    if (!confirm(`Delete "${item.name}"?`)) return;
+    deleteItem(item.id);
+    toast.success('Deleted');
   };
   return (
     <div ref={setNodeRef} className="absolute inset-0 z-0 pointer-events-auto overflow-hidden">
@@ -171,14 +141,11 @@ export function DesktopIcons() {
         <ContextMenuTrigger className="w-full h-full block" />
         <div className="absolute top-10 right-4 bottom-24 w-32 pointer-events-none z-10">
           <div className="flex flex-col items-center gap-6 p-4">
-            {isLoading && items.length === 0 && (
-              <div className="text-[10px] text-white/40 animate-pulse font-medium uppercase tracking-tighter">Syncing...</div>
-            )}
-            {items.map((item) => (
-              <DesktopIcon 
-                key={item.id} 
-                item={item} 
-                onOpen={handleOpen} 
+            {desktopItems.map((item) => (
+              <DesktopIcon
+                key={item.id}
+                item={item}
+                onOpen={handleOpen}
                 onRename={handleRename}
                 onDelete={handleDelete}
               />
@@ -191,10 +158,6 @@ export function DesktopIcons() {
           </ContextMenuItem>
           <ContextMenuItem onClick={() => handleCreate('file')} className="gap-2">
             <FilePlus className="w-4 h-4" /> New File
-          </ContextMenuItem>
-          <ContextMenuSeparator />
-          <ContextMenuItem onClick={() => notifyVfsChange()} className="gap-2">
-            <RefreshCw className="w-4 h-4" /> Refresh Desktop
           </ContextMenuItem>
           <ContextMenuSeparator />
           <ContextMenuItem onClick={() => openApp('settings', 'Settings')} className="gap-2">

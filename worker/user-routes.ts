@@ -1,69 +1,9 @@
 import { Hono } from "hono";
 import type { Env } from './core-utils';
-import { UserEntity, ChatBoardEntity, VFSEntity } from "./entities";
-import { ok, bad, notFound, isStr } from './core-utils';
-import type { CreateVFSItemRequest, UpdateVFSItemRequest } from "@shared/types";
+import { UserEntity, ChatBoardEntity } from "./entities";
+import { ok, bad } from './core-utils';
 export function userRoutes(app: Hono<{ Bindings: Env }>) {
-  app.get('/api/test', (c) => c.json({ success: true, data: { name: 'CF Workers Demo' }}));
-  // VFS ENDPOINTS
-  app.get('/api/vfs', async (c) => {
-    await VFSEntity.ensureSeed(c.env);
-    const queryParent = c.req.query('parentId');
-    const parentId = (queryParent === "null" || !queryParent) ? null : queryParent;
-    const result = await VFSEntity.list(c.env);
-    const items = result?.items || [];
-    const filtered = items.filter(item => item.parentId === parentId);
-    return ok(c, filtered);
-  });
-  app.get('/api/vfs/:id', async (c) => {
-    const id = c.req.param('id');
-    const entity = new VFSEntity(c.env, id);
-    if (!await entity.exists()) return notFound(c, 'Item not found');
-    const state = await entity.getState();
-    return ok(c, state);
-  });
-  app.post('/api/vfs', async (c) => {
-    const body = (await c.req.json()) as CreateVFSItemRequest;
-    if (!body.name) return bad(c, 'Name is required');
-    const newItem = await VFSEntity.create(c.env, {
-      id: crypto.randomUUID(),
-      name: body.name,
-      type: body.type,
-      parentId: body.parentId === "null" ? null : (body.parentId || null),
-      content: body.content || "",
-      size: body.content?.length || 0,
-      updatedAt: Date.now()
-    });
-    return ok(c, newItem);
-  });
-  app.put('/api/vfs/:id', async (c) => {
-    const id = c.req.param('id');
-    const body = (await c.req.json()) as UpdateVFSItemRequest;
-    const entity = new VFSEntity(c.env, id);
-    if (!await entity.exists()) return notFound(c);
-    const updated = await entity.mutate(s => ({
-      ...s,
-      ...body,
-      updatedAt: Date.now(),
-      size: body.content !== undefined ? body.content.length : s.size
-    }));
-    return ok(c, updated);
-  });
-  app.delete('/api/vfs/:id', async (c) => {
-    const id = c.req.param('id');
-    const entity = new VFSEntity(c.env, id);
-    if (!await entity.exists()) return notFound(c);
-    const state = await entity.getState();
-    if (state.type === 'folder') {
-      const { items } = await VFSEntity.list(c.env);
-      const children = (items || []).filter(i => i.parentId === id);
-      for (const child of children) {
-        await VFSEntity.delete(c.env, child.id);
-      }
-    }
-    await VFSEntity.delete(c.env, id);
-    return ok(c, { deleted: id });
-  });
+  app.get('/api/test', (c) => c.json({ success: true, data: { name: 'WebDash API' }}));
   // USERS
   app.get('/api/users', async (c) => {
     await UserEntity.ensureSeed(c.env);
@@ -77,6 +17,7 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
     if (!name?.trim()) return bad(c, 'name required');
     return ok(c, await UserEntity.create(c.env, { id: crypto.randomUUID(), name: name.trim() }));
   });
+  // CHATS
   app.get('/api/chats', async (c) => {
     await ChatBoardEntity.ensureSeed(c.env);
     const cq = c.req.query('cursor');

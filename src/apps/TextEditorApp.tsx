@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { api } from '@/lib/api-client';
 import { useOSStore } from '@/stores/use-os-store';
-import type { VFSItem } from '@shared/types';
+import { useVfsStore } from '@/stores/use-vfs-store';
 import { Loader2, Save, FileText } from 'lucide-react';
 export function TextEditorApp() {
   const activeId = useOSStore(s => s.activeWindowId);
   const windows = useOSStore(s => s.windows);
-  const notifyVfsChange = useOSStore(s => s.notifyVfsChange);
   const win = windows.find(w => w.id === activeId);
   const fileId = win?.metadata?.fileId;
+  const allItems = useVfsStore(s => s.items);
+  const updateItem = useVfsStore(s => s.updateItem);
   const [content, setContent] = useState('');
   const [initialContent, setInitialContent] = useState('');
   const [loading, setLoading] = useState(true);
@@ -19,39 +19,22 @@ export function TextEditorApp() {
       setLoading(false);
       return;
     }
-    const fetchFile = async () => {
-      try {
-        const file = await api<VFSItem>(`/api/vfs/${fileId}`);
-        if (file) {
-          const text = file.content || '';
-          setContent(text);
-          setInitialContent(text);
-        }
-      } catch (err) {
-        console.error('Failed to load file', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchFile();
-  }, [fileId]);
-  const saveFile = useCallback(async (newContent: string) => {
+    const file = allItems.find(i => i.id === fileId);
+    if (file) {
+      const text = file.content || '';
+      setContent(text);
+      setInitialContent(text);
+    }
+    setLoading(false);
+  }, [fileId, allItems]);
+  const saveFile = useCallback((newContent: string) => {
     if (!fileId || newContent === initialContent) return;
     setSaving(true);
-    try {
-      await api(`/api/vfs/${fileId}`, {
-        method: 'PUT',
-        body: JSON.stringify({ content: newContent })
-      });
-      setInitialContent(newContent);
-      setLastSaved(new Date());
-      notifyVfsChange();
-    } catch (err) {
-      console.error('Failed to save file', err);
-    } finally {
-      setSaving(false);
-    }
-  }, [fileId, notifyVfsChange, initialContent]);
+    updateItem(fileId, { content: newContent });
+    setInitialContent(newContent);
+    setLastSaved(new Date());
+    setSaving(false);
+  }, [fileId, initialContent, updateItem]);
   useEffect(() => {
     if (loading || !fileId || content === initialContent) return;
     const timer = setTimeout(() => {
@@ -74,7 +57,7 @@ export function TextEditorApp() {
           value={content}
           onChange={(e) => setContent(e.target.value)}
           className="w-full h-full p-8 bg-transparent outline-none resize-none font-mono text-[14px] leading-relaxed custom-scrollbar"
-          placeholder="Start typing your document..."
+          placeholder="Start typing..."
           spellCheck={false}
         />
       </div>
@@ -84,8 +67,6 @@ export function TextEditorApp() {
             <FileText className="w-3.5 h-3.5" />
             <span>{content.length} chars</span>
           </div>
-          <span className="opacity-50">|</span>
-          <span>{content.split(/\s+/).filter(Boolean).length} words</span>
         </div>
         <div className="flex items-center gap-2">
           {saving ? (
@@ -99,7 +80,7 @@ export function TextEditorApp() {
               <span>Saved {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
             </div>
           ) : (
-            <span className="font-medium">{content === initialContent ? 'System Synced' : 'Changes Pending'}</span>
+            <span className="font-medium">{content === initialContent ? 'Locally Synced' : 'Changes Pending'}</span>
           )}
         </div>
       </div>

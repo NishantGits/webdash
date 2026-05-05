@@ -7,6 +7,7 @@ import { WindowFrame } from '@/components/os/WindowFrame';
 import { LockScreen } from '@/components/os/LockScreen';
 import { Spotlight } from '@/components/os/Spotlight';
 import { useOSStore } from '@/stores/use-os-store';
+import { useVfsStore } from '@/stores/use-vfs-store';
 import { TerminalApp } from '@/apps/TerminalApp';
 import { AboutApp } from '@/apps/AboutApp';
 import { FinderApp } from '@/apps/FinderApp';
@@ -15,7 +16,6 @@ import { BrowserApp } from '@/apps/BrowserApp';
 import { ImageViewerApp } from '@/apps/ImageViewerApp';
 import { TextEditorApp } from '@/apps/TextEditorApp';
 import { AnimatePresence, motion } from 'framer-motion';
-import { api } from '@/lib/api-client';
 import { toast } from 'sonner';
 import { File } from 'lucide-react';
 export function HomePage() {
@@ -24,15 +24,19 @@ export function HomePage() {
   const wallpaper = useOSStore(s => s.wallpaper);
   const toggleSpotlight = useOSStore(s => s.toggleSpotlight);
   const setVfsDragging = useOSStore(s => s.setVfsDragging);
-  const notifyVfsChange = useOSStore(s => s.notifyVfsChange);
   const reduceMotion = useOSStore(s => s.reduceMotion);
   const startupApps = useOSStore(s => s.startupApps);
   const openApp = useOSStore(s => s.openApp);
-  // FIX: Properly initialize sensors at the top level
+  const seed = useVfsStore(s => s.seed);
+  const moveItem = useVfsStore(s => s.moveItem);
   const pointerSensor = useSensor(PointerSensor, {
     activationConstraint: { distance: 10 },
   });
   const sensors = useSensors(pointerSensor);
+  // Initialize Local VFS
+  useEffect(() => {
+    seed();
+  }, [seed]);
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -43,7 +47,6 @@ export function HomePage() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggleSpotlight]);
-  // Startup Effect: Open default apps when unlocked
   useEffect(() => {
     if (!isLocked && startupApps.length > 0 && windows.length === 0) {
       startupApps.forEach(app => {
@@ -54,23 +57,12 @@ export function HomePage() {
   const handleDragStart = (event: DragStartEvent) => {
     setVfsDragging(true);
   };
-  const handleDragEnd = async (event: DragEndEvent) => {
+  const handleDragEnd = (event: DragEndEvent) => {
     setVfsDragging(false);
     const { active, over } = event;
     if (over && active.id !== over.id) {
-      const itemId = active.id as string;
-      const targetParentId = over.id as string;
-      try {
-        await api(`/api/vfs/${itemId}`, {
-          method: 'PUT',
-          body: JSON.stringify({ parentId: targetParentId })
-        });
-        notifyVfsChange();
-        toast.success('Item moved successfully');
-      } catch (err) {
-        console.error('Failed to move item:', err);
-        toast.error('Failed to move item');
-      }
+      moveItem(active.id as string, over.id as string);
+      toast.success('Moved successfully');
     }
   };
   const renderAppContent = (type: string) => {
@@ -104,8 +96,8 @@ export function HomePage() {
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <motion.div 
-              key="desktop-env" 
+            <motion.div
+              key="desktop-env"
               initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 1.02 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.4 }}

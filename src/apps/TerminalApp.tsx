@@ -1,133 +1,105 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { api } from '@/lib/api-client';
-import { useOSStore } from '@/stores/use-os-store';
-import type { VFSItem } from '@shared/types';
+import { useVfsStore } from '@/stores/use-vfs-store';
 interface Log {
   type: 'cmd' | 'resp';
   text: string;
 }
 export function TerminalApp() {
   const [logs, setLogs] = useState<Log[]>([
-    { type: 'resp', text: 'WebDash Shell v1.2.0' },
-    { type: 'resp', text: 'Type "help" for a list of commands.' },
+    { type: 'resp', text: 'WebDash Local Shell v2.0.0 (Privacy First)' },
+    { type: 'resp', text: 'Type "help" for commands.' },
   ]);
   const [input, setInput] = useState('');
   const [currentDirId, setCurrentDirId] = useState<string | null>(null);
   const [currentPathName, setCurrentPathName] = useState('~');
   const bottomRef = useRef<HTMLDivElement>(null);
-  const notifyVfsChange = useOSStore(s => s.notifyVfsChange);
+  const allItems = useVfsStore(s => s.items);
+  const createItem = useVfsStore(s => s.createItem);
+  const deleteItem = useVfsStore(s => s.deleteItem);
   useEffect(() => {
     if (bottomRef.current) {
-      const scrollTimeout = setTimeout(() => {
-        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
-      }, 50);
-      return () => clearTimeout(scrollTimeout);
+      bottomRef.current.scrollIntoView({ behavior: 'smooth' });
     }
   }, [logs]);
-  const handleCommand = async (e: React.FormEvent) => {
+  const handleCommand = (e: React.FormEvent) => {
     e.preventDefault();
     const rawInput = input.trim();
     if (!rawInput) return;
     setLogs(prev => [...prev, { type: 'cmd', text: rawInput }]);
     const parts = rawInput.split(/\s+/);
     const cmd = parts[0].toLowerCase();
-    const args = parts.slice(1);
-    const fullArgs = args.join(' ');
+    const args = parts.slice(1).join(' ');
     try {
       switch (cmd) {
-        case 'help': {
-          setLogs(prev => [...prev, { type: 'resp', text: 'Available commands: ls, cd [dir|..], cat [file], mkdir [name], touch [name], rm [id], pwd, clear, neofetch' }]);
+        case 'help':
+          setLogs(prev => [...prev, { type: 'resp', text: 'Commands: ls, cd, cat, mkdir, touch, rm, pwd, clear, neofetch' }]);
           break;
-        }
-        case 'ls': {
-          const items = await api<VFSItem[]>(`/api/vfs?parentId=${currentDirId ?? 'null'}`);
-          const sorted = [...items].sort((a, b) => {
-            if (a.type !== b.type) return a.type === 'folder' ? -1 : 1;
-            return a.name.localeCompare(b.name);
-          });
-          const display = sorted.map(i => `${i.type === 'folder' ? '📁' : '📄'} ${i.name.padEnd(20)} [${i.id.slice(0, 8)}]`).join('\n');
-          setLogs(prev => [...prev, { type: 'resp', text: display || '(empty directory)' }]);
+        case 'ls':
+          const filtered = allItems.filter(i => i.parentId === currentDirId);
+          const display = filtered.map(i => `${i.type === 'folder' ? '📁' : '📄'} ${i.name}`).join('\n') || '(empty)';
+          setLogs(prev => [...prev, { type: 'resp', text: display }]);
           break;
-        }
-        case 'cd': {
-          if (!fullArgs || fullArgs === '~' || fullArgs === '/') {
+        case 'cd':
+          if (!args || args === '~' || args === '/') {
             setCurrentDirId(null);
             setCurrentPathName('~');
-          } else if (fullArgs === '..') {
-            if (!currentDirId) {
-              setLogs(prev => [...prev, { type: 'resp', text: 'sh: cd: already at root' }]);
-            } else {
-              const item = await api<VFSItem>(`/api/vfs/${currentDirId}`);
-              if (!item.parentId) {
+          } else if (args === '..') {
+            if (currentDirId) {
+              const current = allItems.find(i => i.id === currentDirId);
+              if (current?.parentId) {
+                const parent = allItems.find(i => i.id === current.parentId);
+                setCurrentDirId(parent?.id || null);
+                setCurrentPathName(parent?.name || '~');
+              } else {
                 setCurrentDirId(null);
                 setCurrentPathName('~');
-              } else {
-                const parent = await api<VFSItem>(`/api/vfs/${item.parentId}`);
-                setCurrentDirId(parent.id);
-                setCurrentPathName(parent.name);
               }
             }
           } else {
-            const items = await api<VFSItem[]>(`/api/vfs?parentId=${currentDirId ?? 'null'}`);
-            const target = items.find(i => (i.name === fullArgs || i.id === fullArgs) && i.type === 'folder');
+            const target = allItems.find(i => i.parentId === currentDirId && i.name === args && i.type === 'folder');
             if (target) {
               setCurrentDirId(target.id);
               setCurrentPathName(target.name);
             } else {
-              const isFile = items.find(i => (i.name === fullArgs || i.id === fullArgs) && i.type === 'file');
-              throw new Error(isFile ? `cd: ${fullArgs}: Not a directory` : `cd: no such directory: ${fullArgs}`);
+              setLogs(prev => [...prev, { type: 'resp', text: `cd: no such directory: ${args}` }]);
             }
           }
           break;
-        }
-        case 'cat': {
-          if (!fullArgs) throw new Error('cat: missing operand');
-          const items = await api<VFSItem[]>(`/api/vfs?parentId=${currentDirId ?? 'null'}`);
-          const target = items.find(i => (i.name === fullArgs || i.id === fullArgs));
-          if (target) {
-            if (target.type === 'folder') throw new Error(`cat: ${fullArgs}: Is a directory`);
-            setLogs(prev => [...prev, { type: 'resp', text: target.content || '(empty file)' }]);
+        case 'cat':
+          const file = allItems.find(i => i.parentId === currentDirId && i.name === args && i.type === 'file');
+          if (file) {
+            setLogs(prev => [...prev, { type: 'resp', text: file.content || '(empty)' }]);
           } else {
-            throw new Error(`cat: ${fullArgs}: No such file`);
+            setLogs(prev => [...prev, { type: 'resp', text: `cat: no such file: ${args}` }]);
           }
           break;
-        }
-        case 'mkdir': {
-          if (!fullArgs) throw new Error('mkdir: missing operand');
-          await api('/api/vfs', { method: 'POST', body: JSON.stringify({ name: fullArgs, type: 'folder', parentId: currentDirId }) });
-          notifyVfsChange();
+        case 'mkdir':
+          if (!args) throw new Error('mkdir: missing operand');
+          createItem({ name: args, type: 'folder', parentId: currentDirId });
           break;
-        }
-        case 'touch': {
-          if (!fullArgs) throw new Error('touch: missing operand');
-          await api('/api/vfs', { method: 'POST', body: JSON.stringify({ name: fullArgs, type: 'file', parentId: currentDirId, content: '' }) });
-          notifyVfsChange();
+        case 'touch':
+          if (!args) throw new Error('touch: missing operand');
+          createItem({ name: args, type: 'file', parentId: currentDirId });
           break;
-        }
-        case 'rm': {
-          if (!fullArgs) throw new Error('rm: missing operand');
-          const items = await api<VFSItem[]>(`/api/vfs?parentId=${currentDirId ?? 'null'}`);
-          const target = items.find(i => i.name === fullArgs || i.id === fullArgs);
-          const idToDelete = target ? target.id : fullArgs;
-          await api(`/api/vfs/${idToDelete}`, { method: 'DELETE' });
-          notifyVfsChange();
+        case 'rm':
+          const targetItem = allItems.find(i => i.parentId === currentDirId && i.name === args);
+          if (targetItem) {
+            deleteItem(targetItem.id);
+          } else {
+            setLogs(prev => [...prev, { type: 'resp', text: `rm: cannot remove '${args}': No such file or directory` }]);
+          }
           break;
-        }
-        case 'pwd': {
+        case 'pwd':
           setLogs(prev => [...prev, { type: 'resp', text: `vfs://${currentPathName === '~' ? '/' : '/' + currentPathName}` }]);
           break;
-        }
-        case 'clear': {
+        case 'clear':
           setLogs([]);
           break;
-        }
-        case 'neofetch': {
-          setLogs(prev => [...prev, { type: 'resp', text: 'OS: WebDash Cloud OS\nHost: Cloudflare Runtime\nKernel: Hono Worker + Durable Objects\nShell: React VFS-Shell 1.2\nUptime: 100% (Serverless)\nResolution: ' + window.innerWidth + 'x' + window.innerHeight }]);
+        case 'neofetch':
+          setLogs(prev => [...prev, { type: 'resp', text: 'OS: WebDash Local OS\nPrivacy: 100% Client-Side\nKernel: Zustand + IndexedDB\nShell: React VFS-Shell 2.0' }]);
           break;
-        }
-        default: {
+        default:
           setLogs(prev => [...prev, { type: 'resp', text: `sh: command not found: ${cmd}` }]);
-        }
       }
     } catch (err: any) {
       setLogs(prev => [...prev, { type: 'resp', text: `error: ${err.message}` }]);
