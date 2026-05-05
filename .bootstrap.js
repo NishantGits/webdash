@@ -78,7 +78,8 @@ function updateWranglerJsonc() {
 
 function runSetupCommands() {
     const commands = [
-    "bun install idb-keyval"
+    "bun install idb-keyval",
+    "bun add idb-keyval"
 ];
     
     if (commands.length === 0) {
