@@ -43,6 +43,17 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
     document.addEventListener('pointermove', onPointerMove);
     document.addEventListener('pointerup', onPointerUp);
   };
+  // Boundary detection to keep window header visible
+  const handleDragEnd = (_: any, info: any) => {
+    setIsDragging(false);
+    const newX = win.x + info.offset.x;
+    const newY = win.y + info.offset.y;
+    // Ensure at least 40px of header remains on screen horizontally
+    // and header remains accessible vertically (between 0 and height - 36)
+    const constrainedX = Math.max(-win.width + 100, Math.min(window.innerWidth - 100, newX));
+    const constrainedY = Math.max(0, Math.min(window.innerHeight - 80, newY));
+    updateWindowPosition(win.id, constrainedX, constrainedY);
+  };
   return (
     <motion.div
       layout
@@ -51,35 +62,39 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
         scale: win.isMinimized ? 0.3 : 1,
         opacity: win.isMinimized ? 0 : 1,
         x: win.isMaximized ? 0 : win.x,
-        y: win.isMaximized ? 0 : (win.isMinimized ? window.innerHeight : win.y),
+        y: win.isMaximized ? 0 : (win.isMinimized ? window.innerHeight + 100 : win.y),
         width: win.isMaximized ? '100vw' : win.width,
         height: win.isMaximized ? 'calc(100vh - 28px)' : win.height,
         pointerEvents: win.isMinimized ? 'none' : 'auto',
       }}
-      transition={{ type: 'spring', damping: 25, stiffness: 300, mass: 0.8 }}
+      transition={{ 
+        type: 'spring', 
+        damping: 28, 
+        stiffness: 300, 
+        mass: 0.8,
+        opacity: { duration: 0.2 }
+      }}
       drag={!win.isMaximized && !isResizing && !win.isMinimized}
       dragControls={dragControls}
       dragListener={false}
       dragMomentum={false}
       onDragStart={() => setIsDragging(true)}
-      onDragEnd={(e, info) => {
-        setIsDragging(false);
-        updateWindowPosition(win.id, win.x + info.offset.x, win.y + info.offset.y);
-      }}
+      onDragEnd={handleDragEnd}
       style={{
         zIndex: win.zIndex,
         position: 'absolute',
       }}
       onPointerDown={() => focusWindow(win.id)}
       className={cn(
-        "flex flex-col overflow-hidden shadow-2xl",
+        "flex flex-col overflow-hidden shadow-2xl transition-shadow duration-300",
         win.isMaximized ? "rounded-none" : "rounded-xl border",
         isActive
           ? "border-blue-500/50 shadow-blue-500/20 ring-1 ring-blue-500/10"
-          : "border-white/10 opacity-98",
+          : "border-white/10 opacity-98 shadow-black/40",
         "bg-white/85 dark:bg-black/70 backdrop-blur-2xl"
       )}
     >
+      {/* Title Bar */}
       <div
         className="h-9 flex items-center justify-between px-3 select-none cursor-default bg-white/5 shrink-0"
         onPointerDown={(e) => !win.isMaximized && dragControls.start(e)}
@@ -88,19 +103,19 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
         <div className="flex items-center gap-2 w-24">
           <button
             onClick={(e) => { e.stopPropagation(); closeApp(win.id); }}
-            className="w-3 h-3 rounded-full bg-[#FF5F56] hover:bg-[#FF5F56]/80 flex items-center justify-center group"
+            className="w-3 h-3 rounded-full bg-[#FF5F56] hover:bg-[#FF5F56]/80 flex items-center justify-center group active:scale-90 transition-transform"
           >
             <X className="w-2 h-2 text-black/40 opacity-0 group-hover:opacity-100" />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); minimizeWindow(win.id); }}
-            className="w-3 h-3 rounded-full bg-[#FFBD2E] hover:bg-[#FFBD2E]/80 flex items-center justify-center group"
+            className="w-3 h-3 rounded-full bg-[#FFBD2E] hover:bg-[#FFBD2E]/80 flex items-center justify-center group active:scale-90 transition-transform"
           >
             <Minus className="w-2 h-2 text-black/40 opacity-0 group-hover:opacity-100" />
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); toggleMaximize(win.id); }}
-            className="w-3 h-3 rounded-full bg-[#27C93F] hover:bg-[#27C93F]/80 flex items-center justify-center group"
+            className="w-3 h-3 rounded-full bg-[#27C93F] hover:bg-[#27C93F]/80 flex items-center justify-center group active:scale-90 transition-transform"
           >
             <Maximize2 className="w-2 h-2 text-black/40 opacity-0 group-hover:opacity-100" />
           </button>
@@ -110,9 +125,10 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
         </span>
         <div className="w-24" />
       </div>
+      {/* Content Area */}
       <div className="flex-1 overflow-hidden relative">
         <AnimatePresence>
-          {/* Focus guard: capture clicks on inactive windows even if they contain iframes */}
+          {/* Focus guard: capture clicks on inactive windows to focus them, but pass-through when active */}
           {!isActive && (
             <motion.div
               initial={{ opacity: 0 }}
@@ -121,7 +137,7 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
               className="absolute inset-0 z-50 cursor-default bg-transparent"
             />
           )}
-          {/* Interaction guard during drag/resize */}
+          {/* Interaction guard during drag/resize to prevent iframe event stealing */}
           {(isDragging || isResizing) && (
             <motion.div
               initial={{ opacity: 0 }}
@@ -135,21 +151,22 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
           {children}
         </div>
       </div>
+      {/* Resize Handles */}
       {!win.isMaximized && (
         <>
           <div
-            className="absolute right-0 top-0 bottom-0 w-1 cursor-ew-resize z-[70]"
+            className="absolute right-0 top-0 bottom-0 w-1.5 cursor-ew-resize z-[70]"
             onPointerDown={(e) => handleResize(e, 'e')}
           />
           <div
-            className="absolute bottom-0 left-0 right-0 h-1 cursor-ns-resize z-[70]"
+            className="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize z-[70]"
             onPointerDown={(e) => handleResize(e, 's')}
           />
           <div
-            className="absolute bottom-0 right-0 w-4 h-4 cursor-nwse-resize z-[80]"
+            className="absolute bottom-0 right-0 w-5 h-5 cursor-nwse-resize z-[80] flex items-end justify-end p-0.5"
             onPointerDown={(e) => handleResize(e, 'se')}
           >
-            <div className="absolute bottom-1 right-1 w-2 h-2 border-r-2 border-b-2 border-foreground/20 rounded-br-sm" />
+            <div className="w-2.5 h-2.5 border-r-2 border-b-2 border-foreground/20 rounded-br-sm group-hover:border-foreground/40 transition-colors" />
           </div>
         </>
       )}

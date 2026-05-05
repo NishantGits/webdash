@@ -55,19 +55,25 @@ export const useOSStore = create<OSStore>((set) => ({
   openApp: (appType, title, metadata) => set((state) => {
     const canMultiple = ['image-viewer', 'text-editor'].includes(appType);
     const existing = !canMultiple ? state.windows.find(w => w.appType === appType) : null;
-    const nextZ = state.zIndexCounter + 1;
     if (existing) {
+      const nextZ = state.zIndexCounter + 1;
       return {
         activeWindowId: existing.id,
         zIndexCounter: nextZ,
         windows: state.windows.map(w =>
-          w.id === existing.id 
-            ? { ...w, isMinimized: false, zIndex: nextZ, metadata: metadata ? { ...w.metadata, ...metadata } : w.metadata } 
+          w.id === existing.id
+            ? { 
+                ...w, 
+                isMinimized: false, 
+                zIndex: nextZ, 
+                metadata: metadata ? { ...w.metadata, ...metadata } : w.metadata 
+              }
             : w
         )
       };
     }
     const id = Math.random().toString(36).substring(7);
+    const nextZ = state.zIndexCounter + 1;
     const newWindow: WindowState = {
       id,
       title,
@@ -92,7 +98,9 @@ export const useOSStore = create<OSStore>((set) => ({
     activeWindowId: state.activeWindowId === id ? null : state.activeWindowId,
   })),
   focusWindow: (id) => set((state) => {
-    if (state.activeWindowId === id) return {};
+    // Optimistically skip update if already active and not minimized
+    const target = state.windows.find(w => w.id === id);
+    if (state.activeWindowId === id && target && !target.isMinimized) return {};
     const nextZ = state.zIndexCounter + 1;
     return {
       activeWindowId: id,
@@ -147,7 +155,9 @@ export const useOSStore = create<OSStore>((set) => ({
     windows: state.windows.map(w => w.id === id ? { ...w, title } : w),
   })),
   updateWindowMetadata: (id, metadata) => set((state) => ({
-    windows: state.windows.map(w => w.id === id ? { ...w, metadata: metadata ? { ...w.metadata, ...metadata } : w.metadata } : w),
+    windows: state.windows.map(w => 
+      w.id === id ? { ...w, metadata: metadata ? { ...w.metadata, ...metadata } : w.metadata } : w
+    ),
   })),
   unlock: () => set({ isLocked: false }),
   lock: () => set({ isLocked: true }),
