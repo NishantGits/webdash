@@ -2,14 +2,20 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { get, set, del } from 'idb-keyval';
 import type { VFSItem } from '@shared/types';
-// Custom storage engine using idb-keyval for IndexedDB persistence
+/**
+ * Custom storage engine using idb-keyval for IndexedDB persistence.
+ * createJSONStorage handles stringification/parsing of the whole state, 
+ * so we treat values as raw strings to avoid double serialization.
+ */
 const idbStorage = {
   getItem: async (name: string): Promise<string | null> => {
     const value = await get(name);
-    return value ? JSON.stringify(value) : null;
+    // idb-keyval returns undefined if missing; Zustand expects null
+    return (value as string) ?? null;
   },
   setItem: async (name: string, value: string): Promise<void> => {
-    await set(name, JSON.parse(value));
+    // value is already a stringified JSON from createJSONStorage
+    await set(name, value);
   },
   removeItem: async (name: string): Promise<void> => {
     await del(name);

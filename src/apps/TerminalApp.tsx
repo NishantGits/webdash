@@ -34,12 +34,13 @@ export function TerminalApp() {
         case 'help':
           setLogs(prev => [...prev, { type: 'resp', text: 'Commands: ls, cd, cat, mkdir, touch, rm, pwd, clear, neofetch' }]);
           break;
-        case 'ls':
+        case 'ls': {
           const filtered = allItems.filter(i => i.parentId === currentDirId);
           const display = filtered.map(i => `${i.type === 'folder' ? '📁' : '📄'} ${i.name}`).join('\n') || '(empty)';
           setLogs(prev => [...prev, { type: 'resp', text: display }]);
           break;
-        case 'cd':
+        }
+        case 'cd': {
           if (!args || args === '~' || args === '/') {
             setCurrentDirId(null);
             setCurrentPathName('~');
@@ -65,7 +66,8 @@ export function TerminalApp() {
             }
           }
           break;
-        case 'cat':
+        }
+        case 'cat': {
           const file = allItems.find(i => i.parentId === currentDirId && i.name === args && i.type === 'file');
           if (file) {
             setLogs(prev => [...prev, { type: 'resp', text: file.content || '(empty)' }]);
@@ -73,6 +75,7 @@ export function TerminalApp() {
             setLogs(prev => [...prev, { type: 'resp', text: `cat: no such file: ${args}` }]);
           }
           break;
+        }
         case 'mkdir':
           if (!args) throw new Error('mkdir: missing operand');
           createItem({ name: args, type: 'folder', parentId: currentDirId });
@@ -81,7 +84,7 @@ export function TerminalApp() {
           if (!args) throw new Error('touch: missing operand');
           createItem({ name: args, type: 'file', parentId: currentDirId });
           break;
-        case 'rm':
+        case 'rm': {
           const targetItem = allItems.find(i => i.parentId === currentDirId && i.name === args);
           if (targetItem) {
             deleteItem(targetItem.id);
@@ -89,6 +92,7 @@ export function TerminalApp() {
             setLogs(prev => [...prev, { type: 'resp', text: `rm: cannot remove '${args}': No such file or directory` }]);
           }
           break;
+        }
         case 'pwd':
           setLogs(prev => [...prev, { type: 'resp', text: `vfs://${currentPathName === '~' ? '/' : '/' + currentPathName}` }]);
           break;
