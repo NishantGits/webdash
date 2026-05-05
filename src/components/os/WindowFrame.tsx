@@ -1,152 +1,75 @@
-import React, { useState, useRef, useMemo } from 'react';
-import { motion, useDragControls, AnimatePresence } from 'framer-motion';
+import React from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { X, Minus, Maximize2 } from 'lucide-react';
-import { useWindowSize } from 'react-use';
 import { useOSStore, WindowState } from '@/stores/use-os-store';
 import { cn } from '@/lib/utils';
 interface WindowFrameProps {
   window: WindowState;
   children: React.ReactNode;
 }
-const MENU_BAR_HEIGHT = 28;
-export function WindowFrame({ window: win, children }: WindowFrameProps) {
+export function WindowFrame({ window, children }: WindowFrameProps) {
   const closeApp = useOSStore(s => s.closeApp);
   const focusWindow = useOSStore(s => s.focusWindow);
   const minimizeWindow = useOSStore(s => s.minimizeWindow);
-  const toggleMaximize = useOSStore(s => s.toggleMaximize);
-  const updateWindowSize = useOSStore(s => s.updateWindowSize);
-  const updateWindowPosition = useOSStore(s => s.updateWindowPosition);
   const activeId = useOSStore(s => s.activeWindowId);
-  const reduceMotion = useOSStore(s => s.reduceMotion);
-  const { width: windowWidth, height: windowHeight } = useWindowSize();
-  const dragControls = useDragControls();
-  const windowRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [isResizing, setIsResizing] = useState(false);
-  const isActive = activeId === win.id;
-  const dragConstraints = useMemo(() => ({
-    left: -win.width + 100,
-    right: windowWidth - 100,
-    top: MENU_BAR_HEIGHT,
-    bottom: windowHeight - 50,
-  }), [win.width, windowWidth, windowHeight]);
-  const handleResize = (e: React.PointerEvent, direction: 'se' | 'e' | 's') => {
-    e.stopPropagation();
-    setIsResizing(true);
-    const startX = e.clientX;
-    const startY = e.clientY;
-    const startWidth = win.width;
-    const startHeight = win.height;
-    const onPointerMove = (moveEvent: PointerEvent) => {
-      const deltaX = moveEvent.clientX - startX;
-      const deltaY = moveEvent.clientY - startY;
-      let newWidth = startWidth;
-      let newHeight = startHeight;
-      if (direction.includes('e')) newWidth = Math.max(350, startWidth + deltaX);
-      if (direction.includes('s')) newHeight = Math.max(250, startHeight + deltaY);
-      updateWindowSize(win.id, newWidth, newHeight);
-    };
-    const onPointerUp = () => {
-      setIsResizing(false);
-      document.removeEventListener('pointermove', onPointerMove);
-      document.removeEventListener('pointerup', onPointerUp);
-    };
-    document.addEventListener('pointermove', onPointerMove);
-    document.addEventListener('pointerup', onPointerUp);
-  };
-  const handleDragEnd = (_: any, info: any) => {
-    setIsDragging(false);
-    const newX = win.x + info.offset.x;
-    const newY = win.y + info.offset.y;
-    const constrainedX = Math.max(dragConstraints.left, Math.min(dragConstraints.right, newX));
-    const constrainedY = Math.max(dragConstraints.top, Math.min(dragConstraints.bottom, newY));
-    updateWindowPosition(win.id, constrainedX, constrainedY);
-  };
+  const isActive = activeId === window.id;
+  if (window.isMinimized) return null;
   return (
     <motion.div
-      ref={windowRef}
-      layout={!reduceMotion}
-      initial={{ scale: reduceMotion ? 1 : 0.95, opacity: 0 }}
-      animate={{
-        scale: win.isMinimized ? (reduceMotion ? 1 : 0.4) : 1,
-        opacity: win.isMinimized ? 0 : 1,
-        x: win.isMaximized ? 0 : win.x,
-        y: win.isMaximized ? 0 : (win.isMinimized ? windowHeight : win.y),
-        width: win.isMaximized ? '100vw' : win.width,
-        height: win.isMaximized ? `calc(100vh - ${MENU_BAR_HEIGHT}px)` : win.height,
-        pointerEvents: win.isMinimized ? 'none' : 'auto',
-      }}
-      transition={reduceMotion ? { duration: 0.1 } : {
-        type: 'spring',
-        damping: 30,
-        stiffness: 400,
-        mass: 0.5,
-      }}
-      drag={!win.isMaximized && !isResizing && !win.isMinimized}
-      dragControls={dragControls}
-      dragListener={false}
+      initial={{ scale: 0.9, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      exit={{ scale: 0.9, opacity: 0 }}
+      drag
       dragMomentum={false}
-      dragConstraints={dragConstraints}
-      onDragStart={() => setIsDragging(true)}
-      onDragEnd={handleDragEnd}
+      dragListener={false}
+      dragControls={undefined}
       style={{
-        zIndex: win.zIndex,
+        zIndex: window.zIndex,
+        width: window.width,
+        height: window.height,
+        left: window.x,
+        top: window.y,
         position: 'absolute',
       }}
-      onPointerDown={() => focusWindow(win.id)}
+      onPointerDown={() => focusWindow(window.id)}
       className={cn(
-        "flex flex-col overflow-hidden shadow-2xl transition-[border-color,box-shadow,opacity] duration-200",
-        win.isMaximized ? "rounded-none" : "rounded-xl border",
-        isActive
-          ? "border-blue-500/60 shadow-blue-500/10 ring-[0.5px] ring-blue-500/20"
-          : "border-white/10 dark:border-white/5 opacity-95",
-        "bg-white/90 dark:bg-[#121212]/80 backdrop-blur-3xl"
+        "flex flex-col rounded-xl overflow-hidden shadow-2xl border bg-white/80 dark:bg-black/70 backdrop-blur-xl transition-shadow",
+        isActive ? "border-white/30 shadow-white/5 ring-1 ring-white/10" : "border-transparent opacity-95"
       )}
     >
-      <motion.div
-        layout={!reduceMotion ? "position" : false}
-        className="h-10 flex items-center justify-between px-4 select-none cursor-default bg-white/5 shrink-0 active:bg-white/10 transition-colors"
-        onPointerDown={(e) => !win.isMaximized && dragControls.start(e)}
-        onDoubleClick={() => toggleMaximize(win.id)}
+      {/* Title Bar */}
+      <div 
+        className="h-9 flex items-center justify-between px-3 select-none cursor-default bg-white/10"
+        onPointerDown={(e) => {
+          // Drag handle implementation could go here with useDragControls if needed
+        }}
       >
-        <div className="flex items-center gap-2.5 w-24">
-          <button onClick={(e) => { e.stopPropagation(); closeApp(win.id); }} className="w-3.5 h-3.5 rounded-full bg-[#FF5F56] border border-black/10 flex items-center justify-center group active:scale-90 transition-transform">
-            <X className="w-2.5 h-2.5 text-black/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+        <div className="flex items-center gap-2 w-20">
+          <button 
+            onClick={() => closeApp(window.id)}
+            className="w-3 h-3 rounded-full bg-[#FF5F56] hover:bg-[#FF5F56]/80 flex items-center justify-center group"
+          >
+            <X className="w-2 h-2 text-black/40 opacity-0 group-hover:opacity-100" />
           </button>
-          <button onClick={(e) => { e.stopPropagation(); minimizeWindow(win.id); }} className="w-3.5 h-3.5 rounded-full bg-[#FFBD2E] border border-black/10 flex items-center justify-center group active:scale-90 transition-transform">
-            <Minus className="w-2.5 h-2.5 text-black/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <button 
+            onClick={() => minimizeWindow(window.id)}
+            className="w-3 h-3 rounded-full bg-[#FFBD2E] hover:bg-[#FFBD2E]/80 flex items-center justify-center group"
+          >
+            <Minus className="w-2 h-2 text-black/40 opacity-0 group-hover:opacity-100" />
           </button>
-          <button onClick={(e) => { e.stopPropagation(); toggleMaximize(win.id); }} className="w-3.5 h-3.5 rounded-full bg-[#27C93F] border border-black/10 flex items-center justify-center group active:scale-90 transition-transform">
-            <Maximize2 className="w-2.5 h-2.5 text-black/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <button className="w-3 h-3 rounded-full bg-[#27C93F] hover:bg-[#27C93F]/80 flex items-center justify-center group">
+            <Maximize2 className="w-2 h-2 text-black/40 opacity-0 group-hover:opacity-100" />
           </button>
         </div>
-        <span className="text-[13px] font-bold text-foreground/60 tracking-tight truncate px-4 pointer-events-none">
-          {win.title}
+        <span className="text-[13px] font-semibold text-foreground/70 truncate px-4">
+          {window.title}
         </span>
-        <div className="w-24" />
-      </motion.div>
-      <motion.div layout={!reduceMotion} className="flex-1 relative overflow-hidden">
-        <AnimatePresence initial={false}>
-          {!isActive && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.1 }} className="absolute inset-0 z-50 cursor-default bg-black/0" />
-          )}
-          {(isDragging || isResizing) && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0 }} className="absolute inset-0 z-[60] bg-transparent" />
-          )}
-        </AnimatePresence>
-        <div className="h-full overflow-auto custom-scrollbar rounded-b-xl bg-transparent">
-          {children}
-        </div>
-      </motion.div>
-      {!win.isMaximized && (
-        <>
-          <div className="absolute right-0 top-0 bottom-0 w-1.5 cursor-ew-resize z-[70] hover:bg-primary/5 transition-colors" onPointerDown={(e) => handleResize(e, 'e')} />
-          <div className="absolute bottom-0 left-0 right-0 h-1.5 cursor-ns-resize z-[70] hover:bg-primary/5 transition-colors" onPointerDown={(e) => handleResize(e, 's')} />
-          <div className="absolute bottom-0 right-0 w-6 h-6 cursor-nwse-resize z-[80] flex items-end justify-end p-1 group" onPointerDown={(e) => handleResize(e, 'se')}>
-            <div className="w-3 h-3 border-r-[1.5px] border-b-[1.5px] border-foreground/20 rounded-br-sm group-hover:border-primary/50 transition-colors" />
-          </div>
-        </>
-      )}
+        <div className="w-20" />
+      </div>
+      {/* Content Area */}
+      <div className="flex-1 overflow-auto relative">
+        {children}
+      </div>
     </motion.div>
   );
 }
