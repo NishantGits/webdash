@@ -1,6 +1,7 @@
 import React from 'react';
 import { MenuBar } from '@/components/os/MenuBar';
 import { Dock } from '@/components/os/Dock';
+import { DesktopIcons } from '@/components/os/DesktopIcons';
 import { WindowFrame } from '@/components/os/WindowFrame';
 import { LockScreen } from '@/components/os/LockScreen';
 import { useOSStore } from '@/stores/use-os-store';
@@ -33,18 +34,17 @@ export function HomePage() {
   return (
     <div
       className="fixed inset-0 w-screen h-screen overflow-hidden bg-cover bg-center bg-no-repeat select-none"
-      style={{
-        backgroundImage: `url('${wallpaper}')`,
-      }}
+      style={{ backgroundImage: `url('${wallpaper}')` }}
     >
       <div className="absolute inset-0 bg-black/10 pointer-events-none" />
-      <AnimatePresence>
+      <AnimatePresence mode="wait">
         {isLocked ? (
           <LockScreen key="lock-screen" />
         ) : (
-          <React.Fragment key="desktop">
+          <div key="desktop-env" className="relative w-full h-full">
             <MenuBar />
-            <main className="relative w-full h-full pt-7 pb-20">
+            <DesktopIcons />
+            <main className="relative w-full h-full pt-7 pb-20 overflow-hidden">
               <AnimatePresence>
                 {windows.map((win) => (
                   <WindowFrame key={win.id} window={win}>
@@ -54,7 +54,7 @@ export function HomePage() {
               </AnimatePresence>
             </main>
             <Dock />
-          </React.Fragment>
+          </div>
         )}
       </AnimatePresence>
     </div>
