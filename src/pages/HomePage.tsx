@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { DndContext, PointerSensor, useSensor, useSensors, DragOverlay, DragEndEvent, DragStartEvent } from '@dnd-kit/core';
 import { MenuBar } from '@/components/os/MenuBar';
 import { Dock } from '@/components/os/Dock';
@@ -19,6 +19,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
 import { File } from 'lucide-react';
 export function HomePage() {
+  // Zustand Zero-Tolerance Selectors
   const windows = useOSStore(s => s.windows);
   const isLocked = useOSStore(s => s.isLocked);
   const wallpaper = useOSStore(s => s.wallpaper);
@@ -29,6 +30,7 @@ export function HomePage() {
   const openApp = useOSStore(s => s.openApp);
   const seed = useVfsStore(s => s.seed);
   const moveItem = useVfsStore(s => s.moveItem);
+  // dnd-kit sensors MUST be initialized as hooks in the component body
   const pointerSensor = useSensor(PointerSensor, {
     activationConstraint: { distance: 10 },
   });
@@ -37,6 +39,7 @@ export function HomePage() {
   useEffect(() => {
     seed();
   }, [seed]);
+  // Shortcut handling
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -47,10 +50,13 @@ export function HomePage() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggleSpotlight]);
+  // Startup apps logic - simplified to avoid loops
   useEffect(() => {
     if (!isLocked && startupApps.length > 0 && windows.length === 0) {
       startupApps.forEach(app => {
-        if (app === 'finder') openApp('finder', 'Finder');
+        if (app === 'finder') {
+          openApp('finder', 'Finder');
+        }
       });
     }
   }, [isLocked, startupApps, openApp, windows.length]);
@@ -92,6 +98,7 @@ export function HomePage() {
           <LockScreen key="lock-screen" />
         ) : (
           <DndContext
+            key="os-dnd-context"
             sensors={sensors}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
