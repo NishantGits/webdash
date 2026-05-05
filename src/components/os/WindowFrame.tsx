@@ -1,6 +1,7 @@
 import React, { useState, useRef, useMemo } from 'react';
 import { motion, useDragControls, AnimatePresence } from 'framer-motion';
 import { X, Minus, Maximize2 } from 'lucide-react';
+import { useWindowSize } from 'react-use';
 import { useOSStore, WindowState } from '@/stores/use-os-store';
 import { cn } from '@/lib/utils';
 interface WindowFrameProps {
@@ -17,6 +18,7 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
   const updateWindowPosition = useOSStore(s => s.updateWindowPosition);
   const activeId = useOSStore(s => s.activeWindowId);
   const reduceMotion = useOSStore(s => s.reduceMotion);
+  const { width: windowWidth, height: windowHeight } = useWindowSize();
   const dragControls = useDragControls();
   const windowRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -24,10 +26,10 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
   const isActive = activeId === win.id;
   const dragConstraints = useMemo(() => ({
     left: -win.width + 100,
-    right: window.innerWidth - 100,
+    right: windowWidth - 100,
     top: MENU_BAR_HEIGHT,
-    bottom: window.innerHeight - 50,
-  }), [win.width]);
+    bottom: windowHeight - 50,
+  }), [win.width, windowWidth, windowHeight]);
   const handleResize = (e: React.PointerEvent, direction: 'se' | 'e' | 's') => {
     e.stopPropagation();
     setIsResizing(true);
@@ -69,7 +71,7 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
         scale: win.isMinimized ? (reduceMotion ? 1 : 0.4) : 1,
         opacity: win.isMinimized ? 0 : 1,
         x: win.isMaximized ? 0 : win.x,
-        y: win.isMaximized ? 0 : (win.isMinimized ? window.innerHeight : win.y),
+        y: win.isMaximized ? 0 : (win.isMinimized ? windowHeight : win.y),
         width: win.isMaximized ? '100vw' : win.width,
         height: win.isMaximized ? `calc(100vh - ${MENU_BAR_HEIGHT}px)` : win.height,
         pointerEvents: win.isMinimized ? 'none' : 'auto',

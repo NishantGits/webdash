@@ -4,21 +4,32 @@ import { get, set, del } from 'idb-keyval';
 import type { VFSItem } from '@shared/types';
 /**
  * Custom storage engine using idb-keyval for IndexedDB persistence.
- * createJSONStorage handles stringification/parsing of the whole state, 
- * so we treat values as raw strings to avoid double serialization.
  */
 const idbStorage = {
   getItem: async (name: string): Promise<string | null> => {
-    const value = await get(name);
-    // idb-keyval returns undefined if missing; Zustand expects null
-    return (value as string) ?? null;
+    try {
+      const value = await get(name);
+      if (typeof value === 'string') return value;
+      if (value === undefined || value === null) return null;
+      return JSON.stringify(value);
+    } catch (e) {
+      console.error('Failed to get item from IndexedDB', e);
+      return null;
+    }
   },
   setItem: async (name: string, value: string): Promise<void> => {
-    // value is already a stringified JSON from createJSONStorage
-    await set(name, value);
+    try {
+      await set(name, value);
+    } catch (e) {
+      console.error('Failed to set item in IndexedDB', e);
+    }
   },
   removeItem: async (name: string): Promise<void> => {
-    await del(name);
+    try {
+      await del(name);
+    } catch (e) {
+      console.error('Failed to remove item from IndexedDB', e);
+    }
   },
 };
 interface VFSState {
@@ -38,7 +49,8 @@ export const useVfsStore = create<VFSState & VFSActions>()(
       items: [],
       initialized: false,
       seed: () => {
-        if (get().items.length > 0) return;
+        const state = get();
+        if (state.items.length > 0 || state.initialized) return;
         const defaultItems: VFSItem[] = [
           { id: "root-docs", name: "Documents", type: "folder", parentId: null, size: 0, updatedAt: Date.now() },
           { id: "root-desktop", name: "Desktop", type: "folder", parentId: null, size: 0, updatedAt: Date.now() },
@@ -78,7 +90,6 @@ export const useVfsStore = create<VFSState & VFSActions>()(
       deleteItem: (id) => {
         const itemsToDelete = new Set<string>([id]);
         const state = get();
-        // Recursive helper to find all children
         const findChildren = (parentId: string) => {
           state.items.forEach(item => {
             if (item.parentId === parentId) {
@@ -104,6 +115,13 @@ export const useVfsStore = create<VFSState & VFSActions>()(
     {
       name: 'webdash-vfs',
       storage: createJSONStorage(() => idbStorage),
+      onRehydrateStorage: (state) => {
+        return (rehydratedState) => {
+          if (rehydratedState) {
+            rehydratedState.seed();
+          }
+        };
+      }
     }
   )
 );
