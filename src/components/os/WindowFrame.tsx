@@ -90,7 +90,7 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
         "bg-white/90 dark:bg-[#121212]/80 backdrop-blur-3xl"
       )}
     >
-      {/* Title Bar */}
+      {/* Title Bar - High Z-Index to stay on top of content but below context menus */}
       <div
         className="h-10 flex items-center justify-between px-4 select-none cursor-default bg-white/5 shrink-0 active:bg-white/10 transition-colors"
         onPointerDown={(e) => !win.isMaximized && dragControls.start(e)}
@@ -122,7 +122,7 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
         <div className="w-24" />
       </div>
       {/* Content Area */}
-      <div className="flex-1 overflow-hidden relative">
+      <div className="flex-1 relative">
         <AnimatePresence>
           {/* Focus guard: only for inactive windows */}
           {!isActive && (
@@ -140,7 +140,7 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
             />
           )}
         </AnimatePresence>
-        <div className="h-full overflow-auto custom-scrollbar">
+        <div className="h-full overflow-auto custom-scrollbar rounded-b-xl">
           {children}
         </div>
       </div>
