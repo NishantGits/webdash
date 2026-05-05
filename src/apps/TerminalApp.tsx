@@ -12,19 +12,26 @@ export function TerminalApp() {
     { type: 'resp', text: 'Interacting with Virtual File System...' },
   ]);
   const [input, setInput] = useState('');
-  const [currentDirId, setCurrentDirId] = useState<string | null>(null);
+  const [currentDirId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const notifyVfsChange = useOSStore(s => s.notifyVfsChange);
+  // Improved auto-scrolling with check for ref
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (bottomRef.current) {
+      const scrollTimeout = setTimeout(() => {
+        bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+      }, 50);
+      return () => clearTimeout(scrollTimeout);
+    }
   }, [logs]);
   const handleCommand = async (e: React.FormEvent) => {
     e.preventDefault();
     const rawInput = input.trim();
     if (!rawInput) return;
     setLogs(prev => [...prev, { type: 'cmd', text: rawInput }]);
-    const [cmd] = rawInput.toLowerCase().split(' ');
-    const fullArgs = rawInput.split(' ').slice(1).join(' ');
+    const parts = rawInput.split(' ');
+    const cmd = parts[0].toLowerCase();
+    const fullArgs = parts.slice(1).join(' ');
     try {
       switch (cmd) {
         case 'help': {
@@ -97,7 +104,7 @@ export function TerminalApp() {
             )}
           </div>
         ))}
-        <div ref={bottomRef} />
+        <div ref={bottomRef} className="h-1" />
       </div>
       <form onSubmit={handleCommand} className="mt-2 flex gap-2 border-t border-white/5 pt-2">
         <span className="text-[#569cd6] shrink-0">guest@webdash:~$</span>

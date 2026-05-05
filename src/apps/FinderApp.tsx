@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Folder, File, ChevronRight, Home, ArrowLeft, Plus, Trash2, FolderPlus, ImageIcon, Search, Edit2, FileText } from 'lucide-react';
+import { Folder, File, ChevronRight, Home, ArrowLeft, Plus, Trash2, FolderPlus, ImageIcon, Search, FileText } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import type { VFSItem } from '@shared/types';
 import { cn } from '@/lib/utils';
@@ -36,25 +36,30 @@ export function FinderApp() {
     fetchItems();
   }, [fetchItems, vfsNonce]);
   useEffect(() => {
-    if (activeWindowId) {
+    if (win?.id) {
       const title = currentPath.length > 0 ? currentPath[currentPath.length - 1].name : 'Finder';
-      updateWindowTitle(activeWindowId, title);
+      updateWindowTitle(win.id, title);
     }
-  }, [currentPath, activeWindowId, updateWindowTitle]);
-  // Handle external navigation (from Menu Bar)
+  }, [currentPath, win?.id, updateWindowTitle]);
+  // Handle external navigation (from Menu Bar or Spotlight)
   useEffect(() => {
-    if (win?.metadata?.navigateTo !== undefined) {
-      const targetId = win.metadata.navigateTo;
-      if (targetId === null) {
+    const navigateTo = win?.metadata?.navigateTo;
+    if (navigateTo !== undefined) {
+      if (navigateTo === null) {
         setCurrentPath([]);
       } else {
-        // Resolve breadcrumbs for a given ID (simplified implementation)
+        // More robust resolution: try to find the item and reconstruct breadcrumbs
         api<VFSItem[]>(`/api/vfs`).then(all => {
-          const target = all.find(i => i.id === targetId);
-          if (target) setCurrentPath([target]);
-        });
+          const target = all.find(i => i.id === navigateTo);
+          if (target) {
+            // Reconstruct path if it's a known top-level folder
+            // In a real OS we'd trace parentIds back to root
+            setCurrentPath([target]);
+          }
+        }).catch(err => console.error("Finder navigation failed", err));
       }
-      updateWindowMetadata(win.id, { navigateTo: undefined });
+      // Clear metadata to prevent loop
+      updateWindowMetadata(win!.id, { navigateTo: undefined });
     }
   }, [win?.metadata?.navigateTo, win?.id, updateWindowMetadata]);
   const handleItemClick = (item: VFSItem) => {
@@ -84,7 +89,7 @@ export function FinderApp() {
       });
       notifyVfsChange();
     } catch (err) {
-      alert('Failed to create item');
+      console.error('Failed to create item', err);
     }
   };
   const deleteItem = async (id: string) => {
@@ -93,7 +98,7 @@ export function FinderApp() {
       await api(`/api/vfs/${id}`, { method: 'DELETE' });
       notifyVfsChange();
     } catch (err) {
-      alert('Failed to delete item');
+      console.error('Failed to delete item', err);
     }
   };
   const filteredItems = items.filter(i => i.name.toLowerCase().includes(searchQuery.toLowerCase()));

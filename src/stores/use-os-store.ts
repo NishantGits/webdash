@@ -61,7 +61,9 @@ export const useOSStore = create<OSStore>((set) => ({
         activeWindowId: existing.id,
         zIndexCounter: nextZ,
         windows: state.windows.map(w =>
-          w.id === existing.id ? { ...w, isMinimized: false, zIndex: nextZ, metadata: metadata ?? w.metadata } : w
+          w.id === existing.id 
+            ? { ...w, isMinimized: false, zIndex: nextZ, metadata: metadata ? { ...w.metadata, ...metadata } : w.metadata } 
+            : w
         )
       };
     }
@@ -145,7 +147,7 @@ export const useOSStore = create<OSStore>((set) => ({
     windows: state.windows.map(w => w.id === id ? { ...w, title } : w),
   })),
   updateWindowMetadata: (id, metadata) => set((state) => ({
-    windows: state.windows.map(w => w.id === id ? { ...w, metadata: { ...w.metadata, ...metadata } } : w),
+    windows: state.windows.map(w => w.id === id ? { ...w, metadata: metadata ? { ...w.metadata, ...metadata } : w.metadata } : w),
   })),
   unlock: () => set({ isLocked: false }),
   lock: () => set({ isLocked: true }),

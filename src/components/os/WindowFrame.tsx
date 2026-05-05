@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import { motion, useDragControls, AnimatePresence } from 'framer-motion';
 import { X, Minus, Maximize2 } from 'lucide-react';
 import { useOSStore, WindowState } from '@/stores/use-os-store';
@@ -112,6 +112,16 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
       </div>
       <div className="flex-1 overflow-hidden relative">
         <AnimatePresence>
+          {/* Focus guard: capture clicks on inactive windows even if they contain iframes */}
+          {!isActive && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 z-50 cursor-default bg-transparent"
+            />
+          )}
+          {/* Interaction guard during drag/resize */}
           {(isDragging || isResizing) && (
             <motion.div
               initial={{ opacity: 0 }}
