@@ -7,15 +7,20 @@ export function userRoutes(app: Hono<{ Bindings: Env }>) {
   app.get('/api/test', (c) => c.json({ success: true, data: { name: 'CF Workers Demo' }}));
   // VFS ENDPOINTS
   app.get('/api/vfs', async (c) => {
-    // Ensure we have initial seed data
     await VFSEntity.ensureSeed(c.env);
     const queryParent = c.req.query('parentId');
-    // Standardize null/empty parent references
     const parentId = (queryParent === "null" || !queryParent) ? null : queryParent;
     const result = await VFSEntity.list(c.env);
     const items = result?.items || [];
     const filtered = items.filter(item => item.parentId === parentId);
     return ok(c, filtered);
+  });
+  app.get('/api/vfs/:id', async (c) => {
+    const id = c.req.param('id');
+    const entity = new VFSEntity(c.env, id);
+    if (!await entity.exists()) return notFound(c, 'Item not found');
+    const state = await entity.getState();
+    return ok(c, state);
   });
   app.post('/api/vfs', async (c) => {
     const body = (await c.req.json()) as CreateVFSItemRequest;

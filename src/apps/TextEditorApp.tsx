@@ -21,8 +21,7 @@ export function TextEditorApp() {
     }
     const fetchFile = async () => {
       try {
-        const items = await api<VFSItem[]>(`/api/vfs`);
-        const file = items.find(i => i.id === fileId);
+        const file = await api<VFSItem>(`/api/vfs/${fileId}`);
         if (file) {
           const text = file.content || '';
           setContent(text);
@@ -53,7 +52,6 @@ export function TextEditorApp() {
       setSaving(false);
     }
   }, [fileId, notifyVfsChange, initialContent]);
-  // Debounced auto-save
   useEffect(() => {
     if (loading || !fileId || content === initialContent) return;
     const timer = setTimeout(() => {
@@ -63,9 +61,9 @@ export function TextEditorApp() {
   }, [content, loading, saveFile, fileId, initialContent]);
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-3">
-        <Loader2 className="w-6 h-6 animate-spin" />
-        <p className="text-xs">Opening document...</p>
+      <div className="flex flex-col items-center justify-center h-full text-muted-foreground/50 gap-3">
+        <Loader2 className="w-8 h-8 animate-spin" />
+        <p className="text-xs font-medium uppercase tracking-widest">Opening Document</p>
       </div>
     );
   }
@@ -75,32 +73,33 @@ export function TextEditorApp() {
         <textarea
           value={content}
           onChange={(e) => setContent(e.target.value)}
-          className="w-full h-full p-6 bg-transparent outline-none resize-none font-mono text-sm leading-relaxed"
-          placeholder="Start typing..."
+          className="w-full h-full p-8 bg-transparent outline-none resize-none font-mono text-[14px] leading-relaxed custom-scrollbar"
+          placeholder="Start typing your document..."
           spellCheck={false}
         />
       </div>
-      <div className="h-8 border-t bg-muted/30 px-4 flex items-center justify-between text-[11px] text-muted-foreground">
+      <div className="h-9 border-t bg-muted/30 px-4 flex items-center justify-between text-[11px] text-muted-foreground select-none">
         <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1.5">
-            <FileText className="w-3 h-3" />
-            <span>{content.length} characters</span>
+          <div className="flex items-center gap-1.5 font-medium">
+            <FileText className="w-3.5 h-3.5" />
+            <span>{content.length} chars</span>
           </div>
+          <span className="opacity-50">|</span>
           <span>{content.split(/\s+/).filter(Boolean).length} words</span>
         </div>
         <div className="flex items-center gap-2">
           {saving ? (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2 text-primary animate-pulse font-bold uppercase tracking-tighter">
               <Loader2 className="w-3 h-3 animate-spin" />
-              <span>Saving...</span>
+              <span>Saving</span>
             </div>
           ) : lastSaved ? (
-            <div className="flex items-center gap-1 text-emerald-500">
+            <div className="flex items-center gap-1.5 text-emerald-500 font-medium">
               <Save className="w-3 h-3" />
-              <span>Saved at {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              <span>Saved {lastSaved.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
             </div>
           ) : (
-            <span>{content === initialContent ? 'Saved' : 'Unsaved changes'}</span>
+            <span className="font-medium">{content === initialContent ? 'System Synced' : 'Changes Pending'}</span>
           )}
         </div>
       </div>

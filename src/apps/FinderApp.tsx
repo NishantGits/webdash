@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Folder, File, ChevronRight, Home, ArrowLeft, Plus, Trash2, FolderPlus, ImageIcon, Search, FileText } from 'lucide-react';
+import { Folder, File, ChevronRight, Home, ArrowLeft, Plus, Trash2, FolderPlus, ImageIcon, Search, FileText, Loader2 } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import type { VFSItem } from '@shared/types';
 import { cn } from '@/lib/utils';
@@ -12,14 +12,14 @@ export function FinderApp() {
   const [currentPath, setCurrentPath] = useState<VFSItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const activeWindowId = useOSStore(s => s.activeWindowId);
+  const activeId = useOSStore(s => s.activeWindowId);
   const windows = useOSStore(s => s.windows);
   const updateWindowTitle = useOSStore(s => s.updateWindowTitle);
   const updateWindowMetadata = useOSStore(s => s.updateWindowMetadata);
   const openApp = useOSStore(s => s.openApp);
   const vfsNonce = useOSStore(s => s.vfsNonce);
   const notifyVfsChange = useOSStore(s => s.notifyVfsChange);
-  const win = windows.find(w => w.id === activeWindowId);
+  const win = windows.find(w => w.id === activeId);
   const currentParentId = currentPath.length > 0 ? currentPath[currentPath.length - 1].id : null;
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -41,23 +41,18 @@ export function FinderApp() {
       updateWindowTitle(win.id, title);
     }
   }, [currentPath, win?.id, updateWindowTitle]);
-  // Handle external navigation (from Menu Bar or Spotlight)
   useEffect(() => {
     const navigateTo = win?.metadata?.navigateTo;
     if (navigateTo !== undefined) {
       if (navigateTo === null) {
         setCurrentPath([]);
       } else {
-        // More robust resolution: try to find the item and reconstruct breadcrumbs
-        api<VFSItem[]>(`/api/vfs`).then(all => {
-          const target = all.find(i => i.id === navigateTo);
-          if (target) {
-            // Reconstruct path if it's a known top-level folder
+        api<VFSItem>(`/api/vfs/${navigateTo}`).then(target => {
+          if (target && target.type === 'folder') {
             setCurrentPath([target]);
           }
         }).catch(err => console.error("Finder navigation failed", err));
       }
-      // Clear metadata to prevent loop
       if (win?.id) {
         updateWindowMetadata(win.id, { navigateTo: undefined });
       }
@@ -166,11 +161,15 @@ export function FinderApp() {
         </div>
         <div className="flex-1 p-6 overflow-y-auto">
           {loading ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground/50 animate-pulse">Scanning volume...</div>
+            <div className="flex items-center justify-center h-full">
+              <Loader2 className="w-8 h-8 animate-spin text-primary/30" />
+            </div>
           ) : filteredItems.length === 0 ? (
-            <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
-              <Search className="w-12 h-12 opacity-10" />
-              <p className="text-sm italic">Empty Folder</p>
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground/40 gap-4">
+              <div className="p-8 rounded-full bg-muted/20 border border-dashed border-border/50">
+                <Search className="w-12 h-12" />
+              </div>
+              <p className="text-sm font-medium">No items found</p>
             </div>
           ) : (
             <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-x-4 gap-y-8">
