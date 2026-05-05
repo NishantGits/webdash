@@ -14,10 +14,10 @@ import { SettingsApp } from '@/apps/SettingsApp';
 import { BrowserApp } from '@/apps/BrowserApp';
 import { ImageViewerApp } from '@/apps/ImageViewerApp';
 import { TextEditorApp } from '@/apps/TextEditorApp';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { api } from '@/lib/api-client';
 import { toast } from 'sonner';
-import { File, Folder } from 'lucide-react';
+import { File } from 'lucide-react';
 export function HomePage() {
   const windows = useOSStore(s => s.windows);
   const isLocked = useOSStore(s => s.isLocked);
@@ -25,11 +25,14 @@ export function HomePage() {
   const toggleSpotlight = useOSStore(s => s.toggleSpotlight);
   const setVfsDragging = useOSStore(s => s.setVfsDragging);
   const notifyVfsChange = useOSStore(s => s.notifyVfsChange);
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: { distance: 10 },
-    })
-  );
+  const reduceMotion = useOSStore(s => s.reduceMotion);
+  const startupApps = useOSStore(s => s.startupApps);
+  const openApp = useOSStore(s => s.openApp);
+  // FIX: Properly initialize sensors at the top level
+  const pointerSensor = useSensor(PointerSensor, {
+    activationConstraint: { distance: 10 },
+  });
+  const sensors = useSensors(pointerSensor);
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
@@ -40,6 +43,14 @@ export function HomePage() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [toggleSpotlight]);
+  // Startup Effect: Open default apps when unlocked
+  useEffect(() => {
+    if (!isLocked && startupApps.length > 0 && windows.length === 0) {
+      startupApps.forEach(app => {
+        if (app === 'finder') openApp('finder', 'Finder');
+      });
+    }
+  }, [isLocked, startupApps, openApp, windows.length]);
   const handleDragStart = (event: DragStartEvent) => {
     setVfsDragging(true);
   };
@@ -84,16 +95,22 @@ export function HomePage() {
       style={{ backgroundImage: `url('${wallpaper}')` }}
     >
       <div className="absolute inset-0 bg-black/10 pointer-events-none" />
-      <AnimatePresence mode="wait">
+      <AnimatePresence mode="wait" initial={false}>
         {isLocked ? (
           <LockScreen key="lock-screen" />
         ) : (
-          <DndContext 
-            sensors={sensors} 
+          <DndContext
+            sensors={sensors}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <div key="desktop-env" className="relative w-full h-full overflow-hidden">
+            <motion.div 
+              key="desktop-env" 
+              initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 1.02 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ duration: 0.4 }}
+              className="relative w-full h-full overflow-hidden"
+            >
               <MenuBar />
               <DesktopIcons />
               <main className="relative w-full h-full pt-7 pb-20 overflow-hidden pointer-events-none">
@@ -109,13 +126,13 @@ export function HomePage() {
               </main>
               <Spotlight />
               <Dock />
-              <DragOverlay>
+              <DragOverlay dropAnimation={null}>
                 <div className="p-4 bg-white/20 backdrop-blur-md rounded-xl border border-white/40 shadow-2xl flex items-center gap-3">
                   <File className="w-8 h-8 text-white/80" />
                   <span className="text-xs font-bold text-white uppercase tracking-tighter">Moving...</span>
                 </div>
               </DragOverlay>
-            </div>
+            </motion.div>
           </DndContext>
         )}
       </AnimatePresence>

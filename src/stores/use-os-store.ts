@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 export type AppType = 'terminal' | 'about' | 'browser' | 'settings' | 'finder' | 'image-viewer' | 'text-editor';
+export type DockPosition = 'bottom' | 'left' | 'right';
 export interface WindowState {
   id: string;
   title: string;
@@ -25,6 +26,12 @@ interface OSStore {
   isSpotlightOpen: boolean;
   isDockVisible: boolean;
   isVfsDragging: boolean;
+  // New Settings
+  dockPosition: DockPosition;
+  reduceMotion: boolean;
+  dockMagnification: boolean;
+  dockAutoHide: boolean;
+  startupApps: AppType[];
   openApp: (appType: AppType, title: string, metadata?: any) => void;
   closeApp: (id: string) => void;
   focusWindow: (id: string) => void;
@@ -43,7 +50,14 @@ interface OSStore {
   setSpotlight: (open: boolean) => void;
   setDockVisible: (visible: boolean) => void;
   setVfsDragging: (dragging: boolean) => void;
+  // New Actions
+  setDockPosition: (pos: DockPosition) => void;
+  setReduceMotion: (reduce: boolean) => void;
+  setDockMagnification: (mag: boolean) => void;
+  setDockAutoHide: (hide: boolean) => void;
+  resetSettings: () => void;
 }
+const DEFAULT_WALLPAPER = 'https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?q=80&w=2070&auto=format&fit=crop';
 const Z_INDEX_CEILING = 9000;
 const Z_INDEX_START = 10;
 export const useOSStore = create<OSStore>((set) => ({
@@ -51,12 +65,18 @@ export const useOSStore = create<OSStore>((set) => ({
   activeWindowId: null,
   zIndexCounter: Z_INDEX_START,
   isLocked: true,
-  wallpaper: 'https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?q=80&w=2070&auto=format&fit=crop',
+  wallpaper: localStorage.getItem('os-wallpaper') || DEFAULT_WALLPAPER,
   desktopId: 'root-desktop',
   vfsNonce: 0,
   isSpotlightOpen: false,
   isDockVisible: true,
   isVfsDragging: false,
+  // Initial Settings
+  dockPosition: (localStorage.getItem('os-dock-pos') as DockPosition) || 'bottom',
+  reduceMotion: localStorage.getItem('os-reduce-motion') === 'true',
+  dockMagnification: localStorage.getItem('os-dock-mag') !== 'false',
+  dockAutoHide: localStorage.getItem('os-dock-autohide') === 'true',
+  startupApps: ['finder'],
   openApp: (appType, title, metadata) => set((state) => {
     const canMultiple = ['image-viewer', 'text-editor'].includes(appType);
     const existing = !canMultiple ? state.windows.find(w => w.appType === appType) : null;
@@ -70,14 +90,14 @@ export const useOSStore = create<OSStore>((set) => ({
       return {
         activeWindowId: existing.id,
         zIndexCounter: nextZ,
-        windows: windows.map(w => 
-          w.id === existing.id 
-            ? { 
-                ...w, 
-                isMinimized: false, 
+        windows: windows.map(w =>
+          w.id === existing.id
+            ? {
+                ...w,
+                isMinimized: false,
                 zIndex: nextZ,
-                metadata: metadata ? { ...w.metadata, ...metadata } : w.metadata 
-              } 
+                metadata: metadata ? { ...w.metadata, ...metadata } : w.metadata
+              }
             : w
         )
       };
@@ -118,13 +138,13 @@ export const useOSStore = create<OSStore>((set) => ({
     return {
       activeWindowId: id,
       zIndexCounter: nextZ,
-      windows: windows.map(w => 
+      windows: windows.map(w =>
         w.id === id ? { ...w, zIndex: nextZ, isMinimized: false } : w
       ),
     };
   }),
   minimizeWindow: (id) => set((state) => ({
-    windows: state.windows.map(w => 
+    windows: state.windows.map(w =>
       w.id === id ? { ...w, isMinimized: true } : w
     ),
     activeWindowId: state.activeWindowId === id ? null : state.activeWindowId,
@@ -168,16 +188,45 @@ export const useOSStore = create<OSStore>((set) => ({
     windows: state.windows.map(w => w.id === id ? { ...w, title } : w),
   })),
   updateWindowMetadata: (id, metadata) => set((state) => ({
-    windows: state.windows.map(w => 
+    windows: state.windows.map(w =>
       w.id === id ? { ...w, metadata: metadata ? { ...w.metadata, ...metadata } : w.metadata } : w
     ),
   })),
   unlock: () => set({ isLocked: false }),
   lock: () => set({ isLocked: true }),
-  setWallpaper: (url) => set({ wallpaper: url }),
+  setWallpaper: (url) => {
+    localStorage.setItem('os-wallpaper', url);
+    set({ wallpaper: url });
+  },
   notifyVfsChange: () => set((state) => ({ vfsNonce: state.vfsNonce + 1 })),
   toggleSpotlight: () => set((state) => ({ isSpotlightOpen: !state.isSpotlightOpen })),
   setSpotlight: (open) => set({ isSpotlightOpen: open }),
   setDockVisible: (visible) => set({ isDockVisible: visible }),
   setVfsDragging: (dragging) => set({ isVfsDragging: dragging }),
+  setDockPosition: (pos) => {
+    localStorage.setItem('os-dock-pos', pos);
+    set({ dockPosition: pos });
+  },
+  setReduceMotion: (reduce) => {
+    localStorage.setItem('os-reduce-motion', reduce.toString());
+    set({ reduceMotion: reduce });
+  },
+  setDockMagnification: (mag) => {
+    localStorage.setItem('os-dock-mag', mag.toString());
+    set({ dockMagnification: mag });
+  },
+  setDockAutoHide: (hide) => {
+    localStorage.setItem('os-dock-autohide', hide.toString());
+    set({ dockAutoHide: hide });
+  },
+  resetSettings: () => {
+    localStorage.clear();
+    set({
+      dockPosition: 'bottom',
+      reduceMotion: false,
+      dockMagnification: true,
+      dockAutoHide: false,
+      wallpaper: DEFAULT_WALLPAPER
+    });
+  }
 }));
