@@ -42,10 +42,12 @@ interface OSStore {
   setSpotlight: (open: boolean) => void;
   setDockVisible: (visible: boolean) => void;
 }
+const Z_INDEX_CEILING = 9000;
+const Z_INDEX_START = 10;
 export const useOSStore = create<OSStore>((set) => ({
   windows: [],
   activeWindowId: null,
-  zIndexCounter: 10,
+  zIndexCounter: Z_INDEX_START,
   isLocked: true,
   wallpaper: 'https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?q=80&w=2070&auto=format&fit=crop',
   desktopId: 'root-desktop',
@@ -55,25 +57,30 @@ export const useOSStore = create<OSStore>((set) => ({
   openApp: (appType, title, metadata) => set((state) => {
     const canMultiple = ['image-viewer', 'text-editor'].includes(appType);
     const existing = !canMultiple ? state.windows.find(w => w.appType === appType) : null;
+    let nextZ = state.zIndexCounter + 1;
+    let windows = state.windows;
+    // Normalize z-indices if ceiling reached
+    if (nextZ >= Z_INDEX_CEILING) {
+      windows = [...state.windows].sort((a, b) => a.zIndex - b.zIndex).map((w, i) => ({ ...w, zIndex: Z_INDEX_START + i }));
+      nextZ = Z_INDEX_START + windows.length + 1;
+    }
     if (existing) {
-      const nextZ = state.zIndexCounter + 1;
       return {
         activeWindowId: existing.id,
         zIndexCounter: nextZ,
-        windows: state.windows.map(w =>
+        windows: windows.map(w =>
           w.id === existing.id
-            ? { 
-                ...w, 
-                isMinimized: false, 
-                zIndex: nextZ, 
-                metadata: metadata ? { ...w.metadata, ...metadata } : w.metadata 
+            ? {
+                ...w,
+                isMinimized: false,
+                zIndex: nextZ,
+                metadata: metadata ? { ...w.metadata, ...metadata } : w.metadata
               }
             : w
         )
       };
     }
     const id = Math.random().toString(36).substring(7);
-    const nextZ = state.zIndexCounter + 1;
     const newWindow: WindowState = {
       id,
       title,
@@ -88,7 +95,7 @@ export const useOSStore = create<OSStore>((set) => ({
       metadata,
     };
     return {
-      windows: [...state.windows, newWindow],
+      windows: [...windows, newWindow],
       activeWindowId: id,
       zIndexCounter: nextZ,
     };
@@ -98,14 +105,18 @@ export const useOSStore = create<OSStore>((set) => ({
     activeWindowId: state.activeWindowId === id ? null : state.activeWindowId,
   })),
   focusWindow: (id) => set((state) => {
-    // Optimistically skip update if already active and not minimized
     const target = state.windows.find(w => w.id === id);
     if (state.activeWindowId === id && target && !target.isMinimized) return {};
-    const nextZ = state.zIndexCounter + 1;
+    let nextZ = state.zIndexCounter + 1;
+    let windows = state.windows;
+    if (nextZ >= Z_INDEX_CEILING) {
+      windows = [...state.windows].sort((a, b) => a.zIndex - b.zIndex).map((w, i) => ({ ...w, zIndex: Z_INDEX_START + i }));
+      nextZ = Z_INDEX_START + windows.length + 1;
+    }
     return {
       activeWindowId: id,
       zIndexCounter: nextZ,
-      windows: state.windows.map(w =>
+      windows: windows.map(w =>
         w.id === id ? { ...w, zIndex: nextZ, isMinimized: false } : w
       ),
     };
@@ -140,7 +151,7 @@ export const useOSStore = create<OSStore>((set) => ({
           x: 0,
           y: 0,
           width: window.innerWidth,
-          height: window.innerHeight - 28,
+          height: window.innerHeight - 28, // Respect MenuBar
         };
       }
     })
@@ -155,7 +166,7 @@ export const useOSStore = create<OSStore>((set) => ({
     windows: state.windows.map(w => w.id === id ? { ...w, title } : w),
   })),
   updateWindowMetadata: (id, metadata) => set((state) => ({
-    windows: state.windows.map(w => 
+    windows: state.windows.map(w =>
       w.id === id ? { ...w, metadata: metadata ? { ...w.metadata, ...metadata } : w.metadata } : w
     ),
   })),

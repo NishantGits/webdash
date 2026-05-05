@@ -44,18 +44,33 @@ export function FinderApp() {
   useEffect(() => {
     const navigateTo = win?.metadata?.navigateTo;
     if (navigateTo !== undefined) {
-      if (navigateTo === null) {
-        setCurrentPath([]);
-      } else {
-        api<VFSItem>(`/api/vfs/${navigateTo}`).then(target => {
-          if (target && target.type === 'folder') {
-            setCurrentPath([target]);
+      const performNavigation = async () => {
+        if (navigateTo === null) {
+          setCurrentPath([]);
+        } else {
+          try {
+            const target = await api<VFSItem>(`/api/vfs/${navigateTo}`);
+            if (target && target.type === 'folder') {
+              // If it's a known root, just set it
+              if (['root-desktop', 'root-docs', 'root-downloads'].includes(target.id)) {
+                setCurrentPath([target]);
+              } else if (target.parentId) {
+                // Try to reconstruct one level of parent for breadcrumb context
+                const parent = await api<VFSItem>(`/api/vfs/${target.parentId}`);
+                setCurrentPath([parent, target]);
+              } else {
+                setCurrentPath([target]);
+              }
+            }
+          } catch (err) {
+            console.error("Finder navigation failed", err);
           }
-        }).catch(err => console.error("Finder navigation failed", err));
-      }
-      if (win?.id) {
-        updateWindowMetadata(win.id, { navigateTo: undefined });
-      }
+        }
+        if (win?.id) {
+          updateWindowMetadata(win.id, { navigateTo: undefined });
+        }
+      };
+      performNavigation();
     }
   }, [win?.metadata?.navigateTo, win?.id, updateWindowMetadata, win]);
   const handleItemClick = (item: VFSItem) => {

@@ -7,6 +7,7 @@ interface WindowFrameProps {
   window: WindowState;
   children: React.ReactNode;
 }
+const MENU_BAR_HEIGHT = 28;
 export function WindowFrame({ window: win, children }: WindowFrameProps) {
   const closeApp = useOSStore(s => s.closeApp);
   const focusWindow = useOSStore(s => s.focusWindow);
@@ -47,8 +48,9 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
     setIsDragging(false);
     const newX = win.x + info.offset.x;
     const newY = win.y + info.offset.y;
+    // Boundary enforcement: ensure title bar is always clickable and accessible
     const constrainedX = Math.max(-win.width + 100, Math.min(window.innerWidth - 100, newX));
-    const constrainedY = Math.max(0, Math.min(window.innerHeight - 100, newY));
+    const constrainedY = Math.max(MENU_BAR_HEIGHT, Math.min(window.innerHeight - 50, newY));
     updateWindowPosition(win.id, constrainedX, constrainedY);
   };
   return (
@@ -61,14 +63,14 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
         x: win.isMaximized ? 0 : win.x,
         y: win.isMaximized ? 0 : (win.isMinimized ? window.innerHeight : win.y),
         width: win.isMaximized ? '100vw' : win.width,
-        height: win.isMaximized ? 'calc(100vh - 28px)' : win.height,
+        height: win.isMaximized ? `calc(100vh - ${MENU_BAR_HEIGHT}px)` : win.height,
         pointerEvents: win.isMinimized ? 'none' : 'auto',
       }}
       transition={{
         type: 'spring',
         damping: 30,
-        stiffness: 300,
-        mass: 0.6,
+        stiffness: 400,
+        mass: 0.5,
       }}
       drag={!win.isMaximized && !isResizing && !win.isMinimized}
       dragControls={dragControls}
@@ -90,7 +92,7 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
         "bg-white/90 dark:bg-[#121212]/80 backdrop-blur-3xl"
       )}
     >
-      {/* Title Bar - High Z-Index to stay on top of content but below context menus */}
+      {/* Title Bar */}
       <div
         className="h-10 flex items-center justify-between px-4 select-none cursor-default bg-white/5 shrink-0 active:bg-white/10 transition-colors"
         onPointerDown={(e) => !win.isMaximized && dragControls.start(e)}
@@ -122,20 +124,25 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
         <div className="w-24" />
       </div>
       {/* Content Area */}
-      <div className="flex-1 relative">
-        <AnimatePresence>
-          {/* Focus guard: only for inactive windows */}
+      <div className="flex-1 relative overflow-hidden">
+        <AnimatePresence initial={false}>
+          {/* Focus guard: snappier transitions for inactive window masking */}
           {!isActive && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              transition={{ duration: 0.1 }}
               className="absolute inset-0 z-50 cursor-default bg-black/0"
             />
           )}
-          {/* Drag guard: block pointer events to iframes during window manipulation */}
+          {/* Drag guard: immediate blocking for iframes */}
           {(isDragging || isResizing) && (
             <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0 }}
               className="absolute inset-0 z-[60] bg-transparent"
             />
           )}
@@ -144,7 +151,7 @@ export function WindowFrame({ window: win, children }: WindowFrameProps) {
           {children}
         </div>
       </div>
-      {/* Resize Handles - Hide when maximized */}
+      {/* Resize Handles */}
       {!win.isMaximized && (
         <>
           <div
