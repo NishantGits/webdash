@@ -22,6 +22,7 @@ interface OSStore {
   minimizeWindow: (id: string) => void;
   updateWindowPosition: (id: string, x: number, y: number) => void;
   updateWindowSize: (id: string, width: number, height: number) => void;
+  updateWindowTitle: (id: string, title: string) => void;
 }
 export const useOSStore = create<OSStore>((set) => ({
   windows: [],
@@ -34,7 +35,7 @@ export const useOSStore = create<OSStore>((set) => ({
       return {
         activeWindowId: existing.id,
         zIndexCounter: nextZ,
-        windows: state.windows.map(w => 
+        windows: state.windows.map(w =>
           w.id === existing.id ? { ...w, isMinimized: false, zIndex: nextZ } : w
         )
       };
@@ -45,10 +46,10 @@ export const useOSStore = create<OSStore>((set) => ({
       id,
       title,
       appType,
-      x: 100 + (state.windows.length * 30),
-      y: 100 + (state.windows.length * 30),
-      width: 600,
-      height: 400,
+      x: 100 + (state.windows.length * 40),
+      y: 100 + (state.windows.length * 40),
+      width: appType === 'finder' ? 800 : 600,
+      height: appType === 'finder' ? 500 : 400,
       isMinimized: false,
       isMaximized: false,
       zIndex: nextZ,
@@ -64,17 +65,18 @@ export const useOSStore = create<OSStore>((set) => ({
     activeWindowId: state.activeWindowId === id ? null : state.activeWindowId,
   })),
   focusWindow: (id) => set((state) => {
+    if (state.activeWindowId === id) return {};
     const nextZ = state.zIndexCounter + 1;
     return {
       activeWindowId: id,
       zIndexCounter: nextZ,
-      windows: state.windows.map(w => 
+      windows: state.windows.map(w =>
         w.id === id ? { ...w, zIndex: nextZ, isMinimized: false } : w
       ),
     };
   }),
   minimizeWindow: (id) => set((state) => ({
-    windows: state.windows.map(w => 
+    windows: state.windows.map(w =>
       w.id === id ? { ...w, isMinimized: true } : w
     ),
     activeWindowId: state.activeWindowId === id ? null : state.activeWindowId,
@@ -84,5 +86,8 @@ export const useOSStore = create<OSStore>((set) => ({
   })),
   updateWindowSize: (id, width, height) => set((state) => ({
     windows: state.windows.map(w => w.id === id ? { ...w, width, height } : w),
+  })),
+  updateWindowTitle: (id, title) => set((state) => ({
+    windows: state.windows.map(w => w.id === id ? { ...w, title } : w),
   })),
 }));

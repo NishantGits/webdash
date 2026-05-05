@@ -1,5 +1,5 @@
-import React from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useRef } from 'react';
+import { motion, useDragControls } from 'framer-motion';
 import { X, Minus, Maximize2 } from 'lucide-react';
 import { useOSStore, WindowState } from '@/stores/use-os-store';
 import { cn } from '@/lib/utils';
@@ -12,6 +12,8 @@ export function WindowFrame({ window, children }: WindowFrameProps) {
   const focusWindow = useOSStore(s => s.focusWindow);
   const minimizeWindow = useOSStore(s => s.minimizeWindow);
   const activeId = useOSStore(s => s.activeWindowId);
+  const dragControls = useDragControls();
+  const [isDragging, setIsDragging] = React.useState(false);
   const isActive = activeId === window.id;
   if (window.isMinimized) return null;
   return (
@@ -20,9 +22,11 @@ export function WindowFrame({ window, children }: WindowFrameProps) {
       animate={{ scale: 1, opacity: 1 }}
       exit={{ scale: 0.9, opacity: 0 }}
       drag
-      dragMomentum={false}
+      dragControls={dragControls}
       dragListener={false}
-      dragControls={undefined}
+      dragMomentum={false}
+      onDragStart={() => setIsDragging(true)}
+      onDragEnd={() => setIsDragging(false)}
       style={{
         zIndex: window.zIndex,
         width: window.width,
@@ -33,26 +37,26 @@ export function WindowFrame({ window, children }: WindowFrameProps) {
       }}
       onPointerDown={() => focusWindow(window.id)}
       className={cn(
-        "flex flex-col rounded-xl overflow-hidden shadow-2xl border bg-white/80 dark:bg-black/70 backdrop-blur-xl transition-shadow",
-        isActive ? "border-white/30 shadow-white/5 ring-1 ring-white/10" : "border-transparent opacity-95"
+        "flex flex-col rounded-xl overflow-hidden shadow-2xl border bg-white/90 dark:bg-black/70 backdrop-blur-xl transition-shadow duration-200",
+        isActive 
+          ? "border-blue-500/50 shadow-blue-500/10 ring-1 ring-blue-500/20" 
+          : "border-white/10 opacity-95 shadow-black/20"
       )}
     >
       {/* Title Bar */}
-      <div 
-        className="h-9 flex items-center justify-between px-3 select-none cursor-default bg-white/10"
-        onPointerDown={(e) => {
-          // Drag handle implementation could go here with useDragControls if needed
-        }}
+      <div
+        className="h-9 flex items-center justify-between px-3 select-none cursor-default bg-white/10 shrink-0"
+        onPointerDown={(e) => dragControls.start(e)}
       >
-        <div className="flex items-center gap-2 w-20">
-          <button 
-            onClick={() => closeApp(window.id)}
+        <div className="flex items-center gap-2 w-24">
+          <button
+            onClick={(e) => { e.stopPropagation(); closeApp(window.id); }}
             className="w-3 h-3 rounded-full bg-[#FF5F56] hover:bg-[#FF5F56]/80 flex items-center justify-center group"
           >
             <X className="w-2 h-2 text-black/40 opacity-0 group-hover:opacity-100" />
           </button>
-          <button 
-            onClick={() => minimizeWindow(window.id)}
+          <button
+            onClick={(e) => { e.stopPropagation(); minimizeWindow(window.id); }}
             className="w-3 h-3 rounded-full bg-[#FFBD2E] hover:bg-[#FFBD2E]/80 flex items-center justify-center group"
           >
             <Minus className="w-2 h-2 text-black/40 opacity-0 group-hover:opacity-100" />
@@ -61,14 +65,20 @@ export function WindowFrame({ window, children }: WindowFrameProps) {
             <Maximize2 className="w-2 h-2 text-black/40 opacity-0 group-hover:opacity-100" />
           </button>
         </div>
-        <span className="text-[13px] font-semibold text-foreground/70 truncate px-4">
+        <span className="text-[13px] font-semibold text-foreground/80 truncate px-4 pointer-events-none">
           {window.title}
         </span>
-        <div className="w-20" />
+        <div className="w-24" />
       </div>
       {/* Content Area */}
-      <div className="flex-1 overflow-auto relative">
-        {children}
+      <div className="flex-1 overflow-hidden relative">
+        {/* Iframe Shield Overlay */}
+        {isDragging && (
+          <div className="absolute inset-0 z-50 bg-transparent" />
+        )}
+        <div className="h-full overflow-auto">
+          {children}
+        </div>
       </div>
     </motion.div>
   );
