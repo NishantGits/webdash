@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-export type AppType = 'terminal' | 'about' | 'browser' | 'settings' | 'finder';
+export type AppType = 'terminal' | 'about' | 'browser' | 'settings' | 'finder' | 'image-viewer';
 export interface WindowState {
   id: string;
   title: string;
@@ -11,32 +11,40 @@ export interface WindowState {
   isMinimized: boolean;
   isMaximized: boolean;
   zIndex: number;
+  metadata?: any;
 }
 interface OSStore {
   windows: WindowState[];
   activeWindowId: string | null;
   zIndexCounter: number;
-  openApp: (appType: AppType, title: string) => void;
+  isLocked: boolean;
+  wallpaper: string;
+  openApp: (appType: AppType, title: string, metadata?: any) => void;
   closeApp: (id: string) => void;
   focusWindow: (id: string) => void;
   minimizeWindow: (id: string) => void;
   updateWindowPosition: (id: string, x: number, y: number) => void;
   updateWindowSize: (id: string, width: number, height: number) => void;
   updateWindowTitle: (id: string, title: string) => void;
+  unlock: () => void;
+  lock: () => void;
+  setWallpaper: (url: string) => void;
 }
 export const useOSStore = create<OSStore>((set) => ({
   windows: [],
   activeWindowId: null,
   zIndexCounter: 10,
-  openApp: (appType, title) => set((state) => {
-    const existing = state.windows.find(w => w.appType === appType);
+  isLocked: true,
+  wallpaper: 'https://images.unsplash.com/photo-1614850523459-c2f4c699c52e?q=80&w=2070&auto=format&fit=crop',
+  openApp: (appType, title, metadata) => set((state) => {
+    const existing = state.windows.find(w => w.appType === appType && appType !== 'image-viewer');
     if (existing) {
       const nextZ = state.zIndexCounter + 1;
       return {
         activeWindowId: existing.id,
         zIndexCounter: nextZ,
         windows: state.windows.map(w =>
-          w.id === existing.id ? { ...w, isMinimized: false, zIndex: nextZ } : w
+          w.id === existing.id ? { ...w, isMinimized: false, zIndex: nextZ, metadata: metadata ?? w.metadata } : w
         )
       };
     }
@@ -48,11 +56,12 @@ export const useOSStore = create<OSStore>((set) => ({
       appType,
       x: 100 + (state.windows.length * 40),
       y: 100 + (state.windows.length * 40),
-      width: appType === 'finder' ? 800 : 600,
-      height: appType === 'finder' ? 500 : 400,
+      width: appType === 'finder' ? 800 : appType === 'browser' ? 900 : 600,
+      height: appType === 'finder' ? 500 : appType === 'browser' ? 600 : 400,
       isMinimized: false,
       isMaximized: false,
       zIndex: nextZ,
+      metadata,
     };
     return {
       windows: [...state.windows, newWindow],
@@ -90,4 +99,7 @@ export const useOSStore = create<OSStore>((set) => ({
   updateWindowTitle: (id, title) => set((state) => ({
     windows: state.windows.map(w => w.id === id ? { ...w, title } : w),
   })),
+  unlock: () => set({ isLocked: false }),
+  lock: () => set({ isLocked: true }),
+  setWallpaper: (url) => set({ wallpaper: url }),
 }));

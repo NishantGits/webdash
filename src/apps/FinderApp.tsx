@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
-import { Folder, File, ChevronRight, Home, ArrowLeft, Plus, Trash2, FolderPlus } from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Folder, File, ChevronRight, Home, ArrowLeft, Plus, Trash2, FolderPlus, ImageIcon } from 'lucide-react';
 import { api } from '@/lib/api-client';
 import type { VFSItem } from '@shared/types';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { useOSStore } from '@/stores/use-os-store';
+const IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
 export function FinderApp() {
   const [items, setItems] = useState<VFSItem[]>([]);
   const [currentPath, setCurrentPath] = useState<VFSItem[]>([]);
@@ -12,7 +13,8 @@ export function FinderApp() {
   const currentParentId = currentPath.length > 0 ? currentPath[currentPath.length - 1].id : null;
   const updateWindowTitle = useOSStore(s => s.updateWindowTitle);
   const activeWindowId = useOSStore(s => s.activeWindowId);
-  const fetchItems = async () => {
+  const openApp = useOSStore(s => s.openApp);
+  const fetchItems = useCallback(async () => {
     setLoading(true);
     try {
       const data = await api<VFSItem[]>(`/api/vfs?parentId=${currentParentId ?? 'null'}`);
@@ -22,22 +24,33 @@ export function FinderApp() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [currentParentId]);
   useEffect(() => {
     fetchItems();
-    const title = currentPath.length > 0 ? currentPath[currentPath.length - 1].name : 'Finder';
-    if (activeWindowId) updateWindowTitle(activeWindowId, title);
-  }, [currentParentId]);
-  const handleFolderClick = (item: VFSItem) => {
+    if (activeWindowId) {
+      const title = currentPath.length > 0 ? currentPath[currentPath.length - 1].name : 'Finder';
+      updateWindowTitle(activeWindowId, title);
+    }
+  }, [currentParentId, currentPath, activeWindowId, updateWindowTitle, fetchItems]);
+  const handleItemClick = (item: VFSItem) => {
     if (item.type === 'folder') {
       setCurrentPath([...currentPath, item]);
+    } else {
+      const isImage = IMAGE_EXTENSIONS.some(ext => item.name.toLowerCase().endsWith(ext));
+      if (isImage) {
+        // For demonstration, if no content is present, use a random image placeholder
+        const imgUrl = item.content || `https://images.unsplash.com/photo-1506744038136-46273834b3fb?q=80&w=1000`;
+        openApp('image-viewer', `Image - ${item.name}`, { url: imgUrl });
+      } else {
+        openApp('terminal', `Terminal - ${item.name}`);
+      }
     }
   };
   const handleBack = () => {
     setCurrentPath(currentPath.slice(0, -1));
   };
   const createItem = async (type: 'file' | 'folder') => {
-    const name = prompt(`Enter ${type} name:`, `New ${type}`);
+    const name = prompt(`Enter ${type} name:`, `New ${type}${type === 'file' ? '.txt' : ''}`);
     if (!name) return;
     try {
       await api('/api/vfs', {
@@ -58,13 +71,18 @@ export function FinderApp() {
       alert('Failed to delete item');
     }
   };
+  const renderIcon = (item: VFSItem) => {
+    if (item.type === 'folder') return <Folder className="w-12 h-12 text-blue-400 fill-blue-400/20" />;
+    const isImage = IMAGE_EXTENSIONS.some(ext => item.name.toLowerCase().endsWith(ext));
+    if (isImage) return <ImageIcon className="w-12 h-12 text-pink-400 fill-pink-400/10" />;
+    return <File className="w-12 h-12 text-gray-400 fill-gray-400/10" />;
+  };
   return (
     <div className="flex h-full bg-background text-foreground select-none">
-      {/* Sidebar */}
       <div className="w-44 border-r bg-muted/30 p-4 space-y-6">
         <div className="space-y-2">
           <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider px-2">Favorites</p>
-          <div 
+          <div
             onClick={() => setCurrentPath([])}
             className={cn("flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer text-sm", !currentParentId ? "bg-accent text-accent-foreground" : "hover:bg-accent/50")}
           >
@@ -73,9 +91,7 @@ export function FinderApp() {
           </div>
         </div>
       </div>
-      {/* Main Content */}
       <div className="flex-1 flex flex-col">
-        {/* Toolbar */}
         <div className="h-12 border-b flex items-center justify-between px-4 bg-background/50 backdrop-blur-sm">
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="icon" onClick={handleBack} disabled={currentPath.length === 0}>
@@ -100,7 +116,6 @@ export function FinderApp() {
             </Button>
           </div>
         </div>
-        {/* File Grid */}
         <div className="flex-1 p-6 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center h-full text-muted-foreground animate-pulse">Loading items...</div>
@@ -109,18 +124,14 @@ export function FinderApp() {
           ) : (
             <div className="grid grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-6">
               {items.map((item) => (
-                <div 
+                <div
                   key={item.id}
-                  onDoubleClick={() => handleFolderClick(item)}
+                  onDoubleClick={() => handleItemClick(item)}
                   className="group flex flex-col items-center gap-2 w-20 text-center relative"
                 >
                   <div className="relative">
-                    {item.type === 'folder' ? (
-                      <Folder className="w-12 h-12 text-blue-400 fill-blue-400/20" />
-                    ) : (
-                      <File className="w-12 h-12 text-gray-400 fill-gray-400/10" />
-                    )}
-                    <button 
+                    {renderIcon(item)}
+                    <button
                       onClick={(e) => { e.stopPropagation(); deleteItem(item.id); }}
                       className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
                     >
